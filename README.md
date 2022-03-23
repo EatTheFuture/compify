@@ -1,6 +1,6 @@
-# GI Comp
+# Compify
 
-A Blender addon for compositing CG elements into footage with bounced global illumination.
+A Blender addon for easier/better compositing in 3D space.
 
 This addon requires Blender 3.0 or later.
 

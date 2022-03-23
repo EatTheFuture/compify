@@ -17,11 +17,11 @@
 #======================= END GPL LICENSE BLOCK ========================
 
 bl_info = {
-    "name": "GI Comp",
+    "name": "Compify",
     "version": (0, 1, 0),
     "author": "Nathan Vegdahl, Ian Hubert",
     "blender": (3, 0, 0),
-    "description": "Composite CG elements into your footage with GI lighting",
+    "description": "Do compositing in 3D space.",
     "location": "Scene properties",
     # "doc_url": "",
     "category": "Compositing",
@@ -32,16 +32,16 @@ import math
 
 import bpy
 
-MATERIAL_NAME_PREFIX = "GICompFootage"
+MATERIAL_NAME_PREFIX = "CompifyFootage"
 
 
 #========================================================
 
 
-class GICompPanel(bpy.types.Panel):
-    """Composite with GI lighting."""
-    bl_label = "GI Comp"
-    bl_idname = "DATA_PT_gi_comp"
+class CompifyPanel(bpy.types.Panel):
+    """Composite in 3D space."""
+    bl_label = "Compify"
+    bl_idname = "DATA_PT_compify"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "scene"
@@ -55,10 +55,10 @@ class GICompPanel(bpy.types.Panel):
         layout = self.layout
 
         col = layout.column()
-        col.operator("material.gi_comp_material_new")
+        col.operator("material.compify_material_new")
 
 
-class CompToolsCameraPanel(bpy.types.Panel):
+class CompifyCameraPanel(bpy.types.Panel):
     """Configure cameras for 3D compositing."""
     bl_label = "Comp Tools"
     bl_idname = "DATA_PT_comp_tools_camera"
@@ -75,13 +75,13 @@ class CompToolsCameraPanel(bpy.types.Panel):
         layout = self.layout
 
         col = layout.column()
-        col.operator("material.gi_comp_camera_project_new")
+        col.operator("material.compify_camera_project_new")
 
 #========================================================
 
 
-# Builds a material with the GI Comp footage configuration..
-def make_gi_comp_material(name, context):
+# Builds a material with the Compify footage configuration.
+def make_compify_material(name, context):
     # Create a new completely empty node-based material.
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
@@ -426,10 +426,10 @@ def ensure_camera_project_group(camera):
     return group
 
 
-class GICompMaterialNew(bpy.types.Operator):
-    """Creates a new GI Comp material"""
-    bl_idname = "material.gi_comp_material_new"
-    bl_label = "New GI Comp material"
+class CompifyMaterialNew(bpy.types.Operator):
+    """Creates a new Compify material"""
+    bl_idname = "material.compify_material_new"
+    bl_label = "New Compify material"
     bl_options = {'UNDO'}
 
     @classmethod
@@ -437,13 +437,13 @@ class GICompMaterialNew(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        make_gi_comp_material(MATERIAL_NAME_PREFIX, context)
+        make_compify_material(MATERIAL_NAME_PREFIX, context)
         return {'FINISHED'}
 
 
-class GICompCameraProjectGroupNew(bpy.types.Operator):
+class CompifyCameraProjectGroupNew(bpy.types.Operator):
     """Creates a new camera projection node group from the current selected camera"""
-    bl_idname = "material.gi_comp_camera_project_new"
+    bl_idname = "material.compify_camera_project_new"
     bl_label = "New Camera Project Node Group"
     bl_options = {'UNDO'}
 
@@ -460,17 +460,17 @@ class GICompCameraProjectGroupNew(bpy.types.Operator):
 
 
 def register():
-    bpy.utils.register_class(GICompPanel)
-    bpy.utils.register_class(CompToolsCameraPanel)
-    bpy.utils.register_class(GICompMaterialNew)
-    bpy.utils.register_class(GICompCameraProjectGroupNew)
+    bpy.utils.register_class(CompifyPanel)
+    bpy.utils.register_class(CompifyCameraPanel)
+    bpy.utils.register_class(CompifyMaterialNew)
+    bpy.utils.register_class(CompifyCameraProjectGroupNew)
 
 
 def unregister():
-    bpy.utils.unregister_class(GICompPanel)
-    bpy.utils.unregister_class(CompToolsCameraPanel)
-    bpy.utils.unregister_class(GICompMaterialNew)
-    bpy.utils.unregister_class(GICompCameraProjectGroupNew)
+    bpy.utils.unregister_class(CompifyPanel)
+    bpy.utils.unregister_class(CompifyCameraPanel)
+    bpy.utils.unregister_class(CompifyMaterialNew)
+    bpy.utils.unregister_class(CompifyCameraProjectGroupNew)
 
 
 if __name__ == "__main__":
