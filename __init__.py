@@ -32,7 +32,7 @@ import re
 import bpy
 
 from .node_groups import \
-    ensure_delight_baker_group, \
+    ensure_footage_group, \
     ensure_camera_project_group, \
     ensure_feathered_square_group
 
@@ -59,7 +59,12 @@ class CompifyPanel(bpy.types.Panel):
         layout = self.layout
 
         col = layout.column()
+        col.prop(context.scene, "compify_footage_camera")
+        col.prop(context.scene, "compify_footage")
+        col.prop(context.scene, "compify_proxy_collection")
+        col.prop(context.scene, "compify_lights_collection")
         col.operator("material.compify_material_new")
+
         col.operator("material.compify_temp")
 
 
@@ -99,7 +104,7 @@ def make_compify_material(name, context):
     lighting_bake = mat.node_tree.nodes.new(type='ShaderNodeTexImage')
     diffuse = mat.node_tree.nodes.new(type='ShaderNodeBsdfDiffuse')
     delight_group = mat.node_tree.nodes.new(type='ShaderNodeGroup')
-    delight_group.node_tree = ensure_delight_baker_group()
+    delight_group.node_tree = ensure_footage_group()
 
 
 class CompifyMaterialNew(bpy.types.Operator):
@@ -128,7 +133,7 @@ class CompifyTemp(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        ensure_feathered_square_group()
+        ensure_footage_group()
         return {'FINISHED'}
 
 
@@ -157,6 +162,23 @@ def register():
     bpy.utils.register_class(CompifyCameraProjectGroupNew)
     bpy.utils.register_class(CompifyTemp)
 
+    # Custom properties.
+    bpy.types.Scene.compify_footage_camera = bpy.props.PointerProperty(
+        type=bpy.types.Object,
+        name="Footage Camera",
+    )
+    bpy.types.Scene.compify_footage = bpy.props.PointerProperty(
+        type=bpy.types.Image,
+        name="Footage Texture",
+    )
+    bpy.types.Scene.compify_proxy_collection = bpy.props.PointerProperty(
+        type=bpy.types.Collection,
+        name="Footage Proxy Collection",
+    )
+    bpy.types.Scene.compify_lights_collection = bpy.props.PointerProperty(
+        type=bpy.types.Collection,
+        name="Footage Lights Collection",
+    )
 
 def unregister():
     bpy.utils.unregister_class(CompifyPanel)

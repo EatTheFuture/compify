@@ -1,45 +1,404 @@
 import bpy
 import math
 
-# Ensures that the Delight Baker shader group exists.
+# Ensures that the Compify Footage shader group exists.
 #
 # It will create it if it doesn't exist, and returns the group.
-def ensure_delight_baker_group():
-    NAME = "Delight Baker"
+def ensure_footage_group():
+    NAME = "Compify Footage"
     if NAME in bpy.data.node_groups:
         return bpy.data.node_groups[NAME]
-    else:
-        group = bpy.data.node_groups.new(NAME, type='ShaderNodeTree')
-        for node in group.nodes:
-            group.nodes.remove(node)
 
-        # Create the nodes.
-        input = group.nodes.new(type='NodeGroupInput')
-        output = group.nodes.new(type='NodeGroupOutput')
-        lightpath = group.nodes.new(type='ShaderNodeLightPath')
-        diffuse = group.nodes.new(type='ShaderNodeBsdfDiffuse')
-        mix = group.nodes.new(type='ShaderNodeMixShader')
+    # Create the group.
+    group = bpy.data.node_groups.new(NAME, type='ShaderNodeTree')
+    for node in group.nodes:
+        group.nodes.remove(node)
 
-        # Position the nodes.
-        input.location = (-400.0, 0.0)
-        output.location = (200.0, 0.0)
-        lightpath.location = (-200.0, 400.0)
-        diffuse.location = (-200.0, -100.0)
-        mix.location = (0.0, 0.0)
+    # Create the group inputs and outputs.
+    group.inputs.new(type="NodeSocketColor", name="Footage")
+    group.inputs['Footage'].default_value = (1.0, 0.0, 1.0, 1.0)
+    group.inputs['Footage'].hide_value = True
 
-        # Configure the nodes.
-        group.inputs.new(type="NodeSocketShader", name="Shader")
-        group.outputs.new(type="NodeSocketShader", name="Shader")
-        diffuse.inputs['Color'].default_value = [1.0, 1.0, 1.0, 1.0]
-        diffuse.inputs['Roughness'].default_value = 0.0
+    group.inputs.new(type="NodeSocketFloat", name="Footage Emit")
+    group.inputs['Footage Emit'].default_value = 0.0
+    group.inputs['Footage Emit'].hide_value = True
 
-        # Hook up the nodes.
-        group.links.new(lightpath.outputs['Is Camera Ray'], mix.inputs['Fac'])
-        group.links.new(input.outputs['Shader'], mix.inputs[1])
-        group.links.new(diffuse.outputs['BSDF'], mix.inputs[2])
-        group.links.new(mix.outputs['Shader'], output.inputs['Shader'])
+    group.inputs.new(type="NodeSocketColor", name="Background")
+    group.inputs['Background'].default_value = (1.0, 0.0, 1.0, 1.0)
+    group.inputs['Background'].hide_value = True
 
-        return group
+    group.inputs.new(type="NodeSocketFloat", name="Background Alpha")
+    group.inputs['Background Alpha'].default_value = 0.0
+    group.inputs['Background Alpha'].min_value = 0.0
+    group.inputs['Background Alpha'].max_value = 1.0
+
+    group.inputs.new(type="NodeSocketFloat", name="Background Emit")
+    group.inputs['Background Emit'].default_value = 0.0
+    group.inputs['Background Emit'].min_value = 0.0
+    group.inputs['Background Emit'].max_value = 1.0
+
+    group.inputs.new(type="NodeSocketFloat", name="Footage-Background Mask")
+    group.inputs['Footage-Background Mask'].default_value = 1.0
+    group.inputs['Footage-Background Mask'].hide_value = True
+
+    group.inputs.new(type="NodeSocketColor", name="Baked Lighting")
+    group.inputs['Baked Lighting'].default_value = (1.0, 1.0, 1.0, 1.0)
+    group.inputs['Baked Lighting'].hide_value = True
+
+    group.inputs.new(type="NodeSocketFloat", name="Do Bake")
+    group.inputs['Do Bake'].default_value = 0.0
+    group.inputs['Do Bake'].min_value = 0.0
+    group.inputs['Do Bake'].max_value = 1.0
+
+    group.inputs.new(type="NodeSocketFloat", name="Debug")
+    group.inputs['Debug'].default_value = 0.0
+    group.inputs['Debug'].min_value = 0.0
+    group.inputs['Debug'].max_value = 1.0
+
+    group.outputs.new(type="NodeSocketShader", name="Shader")
+
+    #-------------------
+    # Footage nodes.
+
+    # Create the nodes.
+    footage_frame = group.nodes.new(type='NodeFrame')
+    footage_input = group.nodes.new(type='NodeGroupInput')
+    footage_debug = group.nodes.new(type='ShaderNodeMath')
+    footage_delight = group.nodes.new(type='ShaderNodeMixRGB')
+    footage_1 = group.nodes.new(type='ShaderNodeBsdfDiffuse')
+    footage_2 = group.nodes.new(type='ShaderNodeMixShader')
+
+    # Label the nodes.
+    footage_frame.label = "Footage"
+    footage_input.label = "Footage Input"
+    footage_debug.label = "Footage Debug"
+    footage_delight.label = "Footage Delight"
+    footage_1.label = "Footage 1"
+    footage_2.label = "Footage 2"
+
+    # Put the nodes in their frame.
+    footage_input.parent = footage_frame
+    footage_debug.parent = footage_frame
+    footage_delight.parent = footage_frame
+    footage_1.parent = footage_frame
+    footage_2.parent = footage_frame
+
+    # Position the nodes.
+    hs = 200.0
+    x = 200.0
+    y = -330.0
+
+    footage_input.location = (x, y)
+    x += hs
+    footage_delight.location = (x, y)
+    footage_debug.location = (x, y + 50.0)
+    x += hs
+    footage_1.location = (x, y)
+    x += hs
+    footage_2.location = (x, y)
+
+    # Configure the nodes.
+    for socket in footage_input.outputs:
+        socket.hide = True
+    footage_input.outputs["Footage"].hide = False
+    footage_input.outputs["Footage Emit"].hide = False
+    footage_input.outputs["Baked Lighting"].hide = False
+    footage_input.outputs["Do Bake"].hide = False
+
+    footage_delight.blend_type = 'DIVIDE'
+    footage_delight.use_clamp = False
+    footage_delight.inputs[0].default_value = 1.0
+
+    footage_1.inputs['Roughness'].default_value = 0.0
+    footage_1.hide = True
+
+    footage_debug.operation = 'MAXIMUM'
+    footage_debug.use_clamp = True
+    footage_debug.hide = True
+
+    # Hook up the nodes.
+    group.links.new(footage_input.outputs['Footage'], footage_delight.inputs['Color1'])
+    group.links.new(footage_input.outputs['Footage'], footage_2.inputs[2])
+    group.links.new(footage_input.outputs['Footage Emit'], footage_debug.inputs[0])
+    group.links.new(footage_input.outputs['Baked Lighting'], footage_delight.inputs['Color2'])
+    group.links.new(footage_input.outputs['Do Bake'], footage_debug.inputs[1])
+    group.links.new(footage_delight.outputs['Color'], footage_1.inputs['Color'])
+    group.links.new(footage_1.outputs['BSDF'], footage_2.inputs[1])
+    group.links.new(footage_debug.outputs['Value'], footage_2.inputs['Fac'])
+
+    #-------------------
+    # Background nodes.
+
+    # Create the nodes.
+    background_frame = group.nodes.new(type='NodeFrame')
+    background_input = group.nodes.new(type='NodeGroupInput')
+    background_debug = group.nodes.new(type='ShaderNodeMath')
+    background_delight = group.nodes.new(type='ShaderNodeMixRGB')
+    background_transparent = group.nodes.new(type='ShaderNodeBsdfTransparent')
+    background_1 = group.nodes.new(type='ShaderNodeBsdfDiffuse')
+    background_2 = group.nodes.new(type='ShaderNodeMixShader')
+    background_3 = group.nodes.new(type='ShaderNodeMixShader')
+
+    # Label the nodes.
+    background_frame.label = "Background"
+    background_input.label = "Background Input"
+    background_debug.label = "Background Debug"
+    background_delight.label = "Background Delight"
+    background_transparent.label = "Background Transparent"
+    background_1.label = "Background 1"
+    background_2.label = "Background 2"
+    background_3.label = "Background 3"
+
+    # Put the nodes in their frame.
+    background_input.parent = background_frame
+    background_debug.parent = background_frame
+    background_delight.parent = background_frame
+    background_transparent.parent = background_frame
+    background_1.parent = background_frame
+    background_2.parent = background_frame
+    background_3.parent = background_frame
+
+    # Position the nodes.
+    hs = 200.0
+    x = 0.0
+    y = 0.0
+
+    background_input.location = (x, y)
+    x += hs
+    background_delight.location = (x, y)
+    background_debug.location = (x, y + 80.0)
+    x += hs
+    background_1.location = (x, y + 30)
+    x += hs
+    background_transparent.location = (x, y - 80.0)
+    background_2.location = (x, y + 100.0)
+    x += hs
+    background_3.location = (x, y)
+
+    # Configure the nodes.
+    for socket in background_input.outputs:
+        socket.hide = True
+    background_input.outputs["Background"].hide = False
+    background_input.outputs["Background Alpha"].hide = False
+    background_input.outputs["Background Emit"].hide = False
+    background_input.outputs["Baked Lighting"].hide = False
+    background_input.outputs["Do Bake"].hide = False
+
+    background_delight.blend_type = 'DIVIDE'
+    background_delight.use_clamp = False
+    background_delight.inputs[0].default_value = 1.0
+
+    background_transparent.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
+
+    background_1.inputs['Roughness'].default_value = 0.0
+    background_1.hide = True
+
+    background_debug.operation = 'MAXIMUM'
+    background_debug.use_clamp = True
+    background_debug.hide = True
+
+    # Hook up the nodes.
+    group.links.new(background_input.outputs['Background'], background_delight.inputs['Color1'])
+    group.links.new(background_input.outputs['Background'], background_2.inputs[2])
+    group.links.new(background_input.outputs['Background Alpha'], background_3.inputs['Fac'])
+    group.links.new(background_input.outputs['Background Emit'], background_debug.inputs[0])
+    group.links.new(background_input.outputs['Baked Lighting'], background_delight.inputs['Color2'])
+    group.links.new(background_input.outputs['Do Bake'], background_debug.inputs[1])
+    group.links.new(background_delight.outputs['Color'], background_1.inputs['Color'])
+    group.links.new(background_1.outputs['BSDF'], background_2.inputs[1])
+    group.links.new(background_debug.outputs['Value'], background_2.inputs['Fac'])
+    group.links.new(background_transparent.outputs['BSDF'], background_3.inputs[1])
+    group.links.new(background_2.outputs['Shader'], background_3.inputs[2])
+
+    #-------------------
+    # Camera Ray nodes.
+
+    # Create the nodes.
+    camera_ray_frame = group.nodes.new(type='NodeFrame')
+    camera_input = group.nodes.new(type='NodeGroupInput')
+    light_path = group.nodes.new(type='ShaderNodeLightPath')
+    debug_invert = group.nodes.new(type='ShaderNodeMath')
+    camera_ray = group.nodes.new(type='ShaderNodeMath')
+
+    # Label the nodes.
+    camera_ray_frame.label = "Camera Ray"
+    camera_input.label = "Camera Input"
+    light_path.label = "Light Path"
+    debug_invert.label = "Debug Invert"
+    camera_ray.label = "Camera Ray"
+
+    # Put the nodes in their frame.
+    camera_input.parent = camera_ray_frame
+    light_path.parent = camera_ray_frame
+    debug_invert.parent = camera_ray_frame
+    camera_ray.parent = camera_ray_frame
+
+    # Position the nodes.
+    hs = 200.0
+    x = 400.0
+    y = 260.0
+
+    camera_input.location = (x, y)
+    x += hs
+    light_path.location = (x, y)
+    debug_invert.location = (x, y + 50.0)
+    x += hs
+    camera_ray.location = (x, y)
+
+    # Configure the nodes.
+    for socket in camera_input.outputs:
+        socket.hide = True
+    camera_input.outputs["Debug"].hide = False
+
+    for socket in light_path.outputs:
+        socket.hide = True
+    light_path.outputs["Is Camera Ray"].hide = False
+
+    debug_invert.operation = 'MULTIPLY_ADD'
+    debug_invert.use_clamp = True
+    debug_invert.inputs[1].default_value = -1.0
+    debug_invert.inputs[2].default_value = 1.0
+    debug_invert.hide = True
+
+    camera_ray.operation = 'MINIMUM'
+    camera_ray.use_clamp = True
+    camera_ray.hide = True
+
+    # Hook up the nodes.
+    group.links.new(camera_input.outputs['Debug'], debug_invert.inputs['Value'])
+    group.links.new(light_path.outputs['Is Camera Ray'], camera_ray.inputs[0])
+    group.links.new(debug_invert.outputs['Value'], camera_ray.inputs[1])
+
+    #---------------
+    # Baking nodes.
+
+    # Create the nodes.
+    baking_frame = group.nodes.new(type='NodeFrame')
+    baking_input = group.nodes.new(type='NodeGroupInput')
+    baking_transparent = group.nodes.new(type='ShaderNodeBsdfTransparent')
+    baking_diffuse = group.nodes.new(type='ShaderNodeBsdfDiffuse')
+    baking_1 = group.nodes.new(type='ShaderNodeMixShader')
+    baking_2 = group.nodes.new(type='ShaderNodeMixShader')
+    baking_3 = group.nodes.new(type='ShaderNodeMixShader')
+
+    # Label the nodes.
+    baking_frame.label = "Baking"
+    baking_input.label = "Baking Input"
+    baking_transparent.label = "Baking Transparent"
+    baking_diffuse.label = "Baking Diffuse"
+    baking_1.label = "Baking 1"
+    baking_2.label = "Baking 2"
+    baking_3.label = "Baking 3"
+
+    # Put the nodes in their frame.
+    baking_input.parent = baking_frame
+    baking_transparent.parent = baking_frame
+    baking_diffuse.parent = baking_frame
+    baking_1.parent = baking_frame
+    baking_2.parent = baking_frame
+    baking_3.parent = baking_frame
+
+    # Position the nodes.
+    hs = 200.0
+    x = 850.0
+    y = 700.0
+
+    x += hs
+    baking_transparent.location = (x, y)
+    baking_input.location = (x, y - 140.0)
+
+    x += hs
+    baking_1.location = (x, y)
+
+    x += hs
+    baking_2.location = (x, y)
+    baking_diffuse.location = (x, y - 140.0)
+
+    x += hs
+    baking_3.location = (x, y)
+
+    # Configure the nodes.
+    for socket in baking_input.outputs:
+        socket.hide = True
+    baking_input.outputs["Footage"].hide = False
+    baking_input.outputs["Background"].hide = False
+    baking_input.outputs["Background Alpha"].hide = False
+    baking_input.outputs["Footage-Background Mask"].hide = False
+
+    baking_transparent.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
+
+    baking_diffuse.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
+    baking_diffuse.inputs['Roughness'].default_value = 0.0
+
+    # Hook up the nodes.
+    group.links.new(baking_transparent.outputs['BSDF'], baking_1.inputs[1])
+    group.links.new(baking_input.outputs['Footage'], baking_2.inputs[2])
+    group.links.new(baking_input.outputs['Background'], baking_1.inputs[2])
+    group.links.new(baking_input.outputs['Background Alpha'], baking_1.inputs['Fac'])
+    group.links.new(baking_input.outputs['Footage-Background Mask'], baking_2.inputs['Fac'])
+    group.links.new(baking_1.outputs['Shader'], baking_2.inputs[1])
+    group.links.new(baking_2.outputs['Shader'], baking_3.inputs[1])
+    group.links.new(baking_diffuse.outputs['BSDF'], baking_3.inputs[2])
+
+    #----------------------
+    # The remaining nodes.
+
+    # Create the nodes.
+    mix_input = group.nodes.new(type='NodeGroupInput')
+    background_mask = group.nodes.new(type='ShaderNodeMixShader')
+    camera_switch = group.nodes.new(type='ShaderNodeMixShader')
+    bake_switch = group.nodes.new(type='ShaderNodeMixShader')
+    output = group.nodes.new(type='NodeGroupOutput')
+
+    # Label the nodes.
+    mix_input.label = "Mix Input"
+    background_mask.label = "Background Mask"
+    camera_switch.label = "Camera Switch"
+    bake_switch.label = "Bake Switch"
+
+    # Position the nodes.
+    hs = 200.0
+    x = 1400.0
+    y = 300.0
+
+    mix_input.location = (x, y)
+
+    x += hs
+    background_mask.location = (x, y - 100.0)
+
+    x += hs
+    camera_switch.location = (x, y - 100.0)
+
+    x += hs
+    bake_switch.location = (x, y)
+
+    x += hs
+    output.location = (x, y)
+
+    # Configure the nodes.
+    for socket in mix_input.outputs:
+        socket.hide = True
+    mix_input.outputs["Footage-Background Mask"].hide = False
+    mix_input.outputs["Do Bake"].hide = False
+
+    # Hook up the nodes.
+    group.links.new(mix_input.outputs['Footage-Background Mask'], background_mask.inputs['Fac'])
+    group.links.new(mix_input.outputs['Do Bake'], bake_switch.inputs['Fac'])
+    group.links.new(background_mask.outputs['Shader'], camera_switch.inputs[1])
+    group.links.new(camera_switch.outputs['Shader'], bake_switch.inputs[1])
+    group.links.new(bake_switch.outputs['Shader'], output.inputs['Shader'])
+
+    #-------------------------------------------------
+    # Final hook up of all the groups of nodes above.
+
+    group.links.new(camera_ray.outputs['Value'], baking_3.inputs['Fac'])
+    group.links.new(camera_ray.outputs['Value'], camera_switch.inputs['Fac'])
+    group.links.new(background_3.outputs['Shader'], background_mask.inputs[1])
+    group.links.new(footage_2.outputs['Shader'], background_mask.inputs[2])
+    group.links.new(footage_2.outputs['Shader'], camera_switch.inputs[2])
+    group.links.new(baking_3.outputs['Shader'], bake_switch.inputs[2])
+
+    return group
 
 
 # Ensures that the Feathered Square shader group exists.
