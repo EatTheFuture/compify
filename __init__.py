@@ -36,9 +36,12 @@ from .node_groups import \
     ensure_camera_project_group, \
     ensure_feathered_square_group
 
-MATERIAL_NAME = "Compify Footage"
 MAIN_NODE_NAME = "Compify Footage"
-BAKE_IMAGE_NODE_NAME = "Delight Image"
+BAKE_IMAGE_NODE_NAME = "Baked Lighting"
+
+# Gets the Compify Material name for the active scene.
+def compify_mat_name(context):
+    return "Compify Footage | " + context.scene.name
 
 
 #========================================================
@@ -61,14 +64,20 @@ class CompifyPanel(bpy.types.Panel):
         layout = self.layout
 
         col = layout.column()
+
+        col.template_ID(context.scene, "compify_footage", open="image.open")
+        if context.scene.compify_footage != None:
+            col.prop(context.scene.compify_footage.colorspace_settings, "name")
+
+        col.separator_spacer()
+
         col.prop(context.scene, "compify_footage_camera")
-        col.prop(context.scene, "compify_footage")
         col.prop(context.scene, "compify_proxy_collection")
         col.prop(context.scene, "compify_lights_collection")
+
+        col.separator_spacer()
+
         col.operator("material.compify_material_new")
-
-        col.operator("material.compify_temp")
-
         col.operator("material.compify_bake")
 
 
@@ -93,24 +102,91 @@ class CompifyCameraPanel(bpy.types.Panel):
 
 #========================================================
 
+# Ensures that the Compify Footage material exists for this scene.
+#
+# It will create it if it doesn't exist, and returns the material.
+def ensure_compify_material(context):
+    name = compify_mat_name(context)
+    if name in bpy.data.materials:
+        return bpy.data.materials[name]
+    else:
+        return create_compify_material(
+            name,
+            context.scene.compify_footage_camera,
+            context.scene.compify_footage,
+        )
 
-# Builds a material with the Compify footage configuration.
-def make_compify_material(name, context):
+
+# Creates a Compify Footage material.
+def create_compify_material(name, camera, footage):
     # Create a new completely empty node-based material.
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
+    mat.blend_method = 'HASHED'
+    mat.shadow_method = 'HASHED'
     for node in mat.node_tree.nodes:
         mat.node_tree.nodes.remove(node)
 
-    # Create the nodes we need.
+    # Create the nodes.
     output = mat.node_tree.nodes.new(type='ShaderNodeOutputMaterial')
-    footage = mat.node_tree.nodes.new(type='ShaderNodeTexImage')
-    lighting_bake = mat.node_tree.nodes.new(type='ShaderNodeTexImage')
-    diffuse = mat.node_tree.nodes.new(type='ShaderNodeBsdfDiffuse')
-    delight_group = mat.node_tree.nodes.new(type='ShaderNodeGroup')
-    delight_group.node_tree = ensure_footage_group()
+    camera_project = mat.node_tree.nodes.new(type='ShaderNodeGroup')
+    input_footage = mat.node_tree.nodes.new(type='ShaderNodeTexImage')
+    feathered_square = mat.node_tree.nodes.new(type='ShaderNodeGroup')
+    baked_lighting = mat.node_tree.nodes.new(type='ShaderNodeTexImage')
+    compify_footage = mat.node_tree.nodes.new(type='ShaderNodeGroup')
 
+    # Label and name the nodes.
+    camera_project.label = "Camera Project"
+    input_footage.label = "Input Footage"
+    feathered_square.label = "Feathered Square"
+    baked_lighting.label = BAKE_IMAGE_NODE_NAME
+    compify_footage.label = MAIN_NODE_NAME
 
+    camera_project.name = "Camera Project"
+    input_footage.name = "Input Footage"
+    feathered_square.name = "Feathered Square"
+    baked_lighting.name = BAKE_IMAGE_NODE_NAME
+    compify_footage.name = MAIN_NODE_NAME
+
+    # Position the nodes.
+    hs = 400.0
+    x = 0.0
+
+    camera_project.location = (x, 0.0)
+    x += hs
+    input_footage.location = (x, 400.0)
+    feathered_square.location = (x, 0.0)
+    baked_lighting.location = (x, -200.0)
+    x += hs
+    compify_footage.location = (x, 0.0)
+    x += hs
+    output.location = (x, 0.0)
+
+    # Configure the nodes.
+    camera_project.node_tree = ensure_camera_project_group(camera)
+    camera_project.inputs['Aspect Ratio'].default_value = footage.size[0] / footage.size[1]
+
+    input_footage.image = footage
+    input_footage.interpolation = 'Closest'
+    input_footage.projection = 'FLAT'
+    input_footage.extension = 'EXTEND'
+    input_footage.image_user.frame_duration = footage.frame_duration
+    input_footage.image_user.use_auto_refresh = True
+
+    feathered_square.node_tree = ensure_feathered_square_group()
+    feathered_square.inputs['Feather'].default_value = 0.05
+    feathered_square.inputs['Dilate'].default_value = 0.0
+
+    baked_lighting.image = None # TODO
+    compify_footage.node_tree = ensure_footage_group()
+
+    # Hook up the nodes.
+    mat.node_tree.links.new(camera_project.outputs['Vector'], input_footage.inputs['Vector'])
+    mat.node_tree.links.new(camera_project.outputs['Vector'], feathered_square.inputs['Vector'])
+    mat.node_tree.links.new(input_footage.outputs['Color'], compify_footage.inputs['Footage'])
+    mat.node_tree.links.new(feathered_square.outputs['Value'], compify_footage.inputs['Footage-Background Mask'])
+    mat.node_tree.links.new(baked_lighting.outputs['Color'], compify_footage.inputs['Baked Lighting'])
+    mat.node_tree.links.new(compify_footage.outputs['Shader'], output.inputs['Surface'])
 
 
 class CompifyMaterialNew(bpy.types.Operator):
@@ -124,8 +200,9 @@ class CompifyMaterialNew(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        make_compify_material(MATERIAL_NAME_PREFIX, context)
+        ensure_compify_material(context)
         return {'FINISHED'}
+
 
 class CompifyBake(bpy.types.Operator):
     """Does the Compify lighting baking for proxy geometry."""
@@ -162,7 +239,7 @@ class CompifyBake(bpy.types.Operator):
         proxy_lights = []
         if context.scene.compify_lights_collection != None:
             proxy_lights = context.scene.compify_lights_collection.objects
-        material = bpy.data.materials[MATERIAL_NAME]
+        material = bpy.data.materials[compify_mat_name(context)]
         self.main_node = material.node_tree.nodes[MAIN_NODE_NAME]
         delight_image_node = material.node_tree.nodes[BAKE_IMAGE_NODE_NAME]
 
@@ -252,21 +329,6 @@ class CompifyBake(bpy.types.Operator):
         return {'PASS_THROUGH'}
 
 
-class CompifyTemp(bpy.types.Operator):
-    """Temp for testing.."""
-    bl_idname = "material.compify_temp"
-    bl_label = "Compify Temp"
-    bl_options = {'UNDO'}
-
-    @classmethod
-    def poll(cls, context):
-        return True
-
-    def execute(self, context):
-        ensure_footage_group()
-        return {'FINISHED'}
-
-
 class CompifyCameraProjectGroupNew(bpy.types.Operator):
     """Creates a new camera projection node group from the current selected camera"""
     bl_idname = "material.compify_camera_project_new"
@@ -291,7 +353,6 @@ def register():
     bpy.utils.register_class(CompifyMaterialNew)
     bpy.utils.register_class(CompifyBake)
     bpy.utils.register_class(CompifyCameraProjectGroupNew)
-    bpy.utils.register_class(CompifyTemp)
 
     # Custom properties.
     bpy.types.Scene.compify_footage_camera = bpy.props.PointerProperty(
@@ -317,7 +378,6 @@ def unregister():
     bpy.utils.unregister_class(CompifyMaterialNew)
     bpy.utils.unregister_class(CompifyBake)
     bpy.utils.unregister_class(CompifyCameraProjectGroupNew)
-    bpy.utils.unregister_class(CompifyTemp)
 
 
 if __name__ == "__main__":
