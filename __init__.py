@@ -36,7 +36,9 @@ from .node_groups import \
     ensure_camera_project_group, \
     ensure_feathered_square_group
 
-MATERIAL_NAME_PREFIX = "CompifyFootage"
+MATERIAL_NAME = "Compify Footage"
+MAIN_NODE_NAME = "Compify Footage"
+BAKE_IMAGE_NODE_NAME = "Delight Image"
 
 
 #========================================================
@@ -66,6 +68,8 @@ class CompifyPanel(bpy.types.Panel):
         col.operator("material.compify_material_new")
 
         col.operator("material.compify_temp")
+
+        col.operator("material.compify_bake")
 
 
 class CompifyCameraPanel(bpy.types.Panel):
@@ -107,6 +111,8 @@ def make_compify_material(name, context):
     delight_group.node_tree = ensure_footage_group()
 
 
+
+
 class CompifyMaterialNew(bpy.types.Operator):
     """Creates a new Compify material"""
     bl_idname = "material.compify_material_new"
@@ -120,6 +126,130 @@ class CompifyMaterialNew(bpy.types.Operator):
     def execute(self, context):
         make_compify_material(MATERIAL_NAME_PREFIX, context)
         return {'FINISHED'}
+
+class CompifyBake(bpy.types.Operator):
+    """Does the Compify lighting baking for proxy geometry."""
+    bl_idname = "material.compify_bake"
+    bl_label = "Bake Footage Lighting"
+    bl_options = {'UNDO'}
+
+    # Operator fields, for keeping track of state during modal operation.
+    _timer = None
+    is_started = False
+    hide_render_list = {}
+    main_node = None
+
+    # Note: we use a modal technique inspired by this to keep the baking
+    # from blocking the UI:
+    # https://blender.stackexchange.com/questions/71454/is-it-possible-to-make-a-sequence-of-renders-and-give-the-user-the-option-to-can
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
+    def execute(self, context):
+        # Clear operator fields.  Not strictly necessary, since they
+        # should be cleared at the end of the bake.  But just in case.
+        self._timer = None
+        self.is_started = False
+        self.hide_render_list = {}
+        self.main_node = None
+
+        # Misc setup and checks.
+        if context.scene.compify_proxy_collection == None:
+            return {'CANCELLED'}
+        proxy_objects = context.scene.compify_proxy_collection.objects
+        proxy_lights = []
+        if context.scene.compify_lights_collection != None:
+            proxy_lights = context.scene.compify_lights_collection.objects
+        material = bpy.data.materials[MATERIAL_NAME]
+        self.main_node = material.node_tree.nodes[MAIN_NODE_NAME]
+        delight_image_node = material.node_tree.nodes[BAKE_IMAGE_NODE_NAME]
+
+        if len(proxy_objects) == 0:
+            return {'CANCELLED'}
+
+        # Configure the material for baking mode.
+        self.main_node.inputs["Do Bake"].default_value = 1.0
+        self.main_node.inputs["Debug"].default_value = 0.0
+        delight_image_node.select = True
+        material.node_tree.nodes.active = delight_image_node
+
+        # Select all proxy geometry objects, and nothing else.
+        for obj in context.scene.objects:
+            obj.select_set(False)
+        for obj in proxy_objects:
+            obj.select_set(True)
+        context.view_layer.objects.active = proxy_objects[0]
+
+        # Build a dictionary of the visibility of non-proxy objects so that
+        # we can restore it afterwards.
+        for obj in context.scene.objects:
+            if obj.name not in proxy_objects and obj.name not in proxy_lights:
+                self.hide_render_list[obj.name] = obj.hide_render
+
+        # Make all non-proxy objects invisible.
+        for obj_name in self.hide_render_list:
+            bpy.data.objects[obj_name].hide_render = True
+
+        # Set up the timer.
+        self._timer = context.window_manager.event_timer_add(0.5, window=context.window)
+        context.window_manager.modal_handler_add(self)
+
+        return {'RUNNING_MODAL'}
+
+
+    def modal(self, context, event):
+        if event.type == 'TIMER':
+            if not self.is_started:
+                self.is_started = True
+                # Do the bake.
+                bpy.ops.object.bake(
+                    "INVOKE_DEFAULT",
+                    type='DIFFUSE',
+                    # pass_filter={},
+                    # filepath='',
+                    # width=512,
+                    # height=512,
+                    margin=4,
+                    margin_type='EXTEND',
+                    use_selected_to_active=False,
+                    max_ray_distance=0.0,
+                    cage_extrusion=0.0,
+                    cage_object='',
+                    normal_space='TANGENT',
+                    normal_r='POS_X',
+                    normal_g='POS_Y',
+                    normal_b='POS_Z',
+                    target='IMAGE_TEXTURES',
+                    save_mode='INTERNAL',
+                    use_clear=True,
+                    use_cage=False,
+                    use_split_materials=False,
+                    use_automatic_name=False,
+                    uv_layer='',
+                )
+            # elif not self.is_baking:
+            else:
+                # Clean up the handlers and timer.
+                context.window_manager.event_timer_remove(self._timer)
+                self._timer = None
+
+                # Restore visibility of non-proxy objects.
+                for obj_name in self.hide_render_list:
+                    bpy.data.objects[obj_name].hide_render = self.hide_render_list[obj_name]
+                self.hide_render_list = {}
+
+                # Set material to non-bake mode.
+                self.main_node.inputs["Do Bake"].default_value = 0.0
+                self.main_node = None
+
+                # Reset other self properties.
+                self.is_started = False
+
+                return {'FINISHED'}
+
+        return {'PASS_THROUGH'}
 
 
 class CompifyTemp(bpy.types.Operator):
@@ -159,6 +289,7 @@ def register():
     bpy.utils.register_class(CompifyPanel)
     bpy.utils.register_class(CompifyCameraPanel)
     bpy.utils.register_class(CompifyMaterialNew)
+    bpy.utils.register_class(CompifyBake)
     bpy.utils.register_class(CompifyCameraProjectGroupNew)
     bpy.utils.register_class(CompifyTemp)
 
@@ -184,6 +315,7 @@ def unregister():
     bpy.utils.unregister_class(CompifyPanel)
     bpy.utils.unregister_class(CompifyCameraPanel)
     bpy.utils.unregister_class(CompifyMaterialNew)
+    bpy.utils.unregister_class(CompifyBake)
     bpy.utils.unregister_class(CompifyCameraProjectGroupNew)
     bpy.utils.unregister_class(CompifyTemp)
 
