@@ -122,15 +122,28 @@ class CompifyCameraPanel(bpy.types.Panel):
         col = layout.column()
         col.operator("material.compify_camera_project_new")
 
+
 #========================================================
+
+
+# Fetches the current scene's compify material if it exists.
+#
+# Returns the material if it exists and None if it doesn't.
+def get_compify_material(context):
+    name = compify_mat_name(context)
+    if name in bpy.data.materials:
+        return bpy.data.materials[name]
+    else:
+        return None
+
 
 # Ensures that the Compify Footage material exists for this scene.
 #
 # It will create it if it doesn't exist, and returns the material.
 def ensure_compify_material(context, baking_res=(1024, 1024)):
-    name = compify_mat_name(context)
-    if name in bpy.data.materials:
-        return bpy.data.materials[name]
+    mat = get_compify_material(context)
+    if mat != None:
+        return mat
     else:
         bake_image_name = compify_baked_texture_name(context)
         bake_image = None
@@ -148,7 +161,7 @@ def ensure_compify_material(context, baking_res=(1024, 1024)):
             )
 
         return create_compify_material(
-            name,
+            compify_mat_name(context),
             context.scene.compify_footage_camera,
             context.scene.compify_footage,
             bake_image,
@@ -234,6 +247,25 @@ def create_compify_material(name, camera, footage, bake_image=None):
     mat.node_tree.links.new(compify_footage.outputs['Shader'], output.inputs['Surface'])
 
     return mat
+
+
+def change_footage_material_clip(scene, context):
+    if scene.compify_footage == None:
+        return
+    mat = get_compify_material(context)
+    if mat != None:
+        footage_node = mat.node_tree.nodes["Input Footage"]
+        footage_node.image = scene.compify_footage
+        footage_node.image_user.frame_duration = scene.compify_footage.frame_duration
+
+
+def change_footage_camera(scene, context):
+    if scene.compify_footage_camera == None or scene.compify_footage_camera.type != 'CAMERA':
+        return
+    mat = get_compify_material(context)
+    if mat != None:
+        group = ensure_camera_project_group(scene.compify_footage_camera)
+        mat.node_tree.nodes["Camera Project"].node_tree = group
 
 
 class CompifyPrepScene(bpy.types.Operator):
@@ -486,10 +518,13 @@ def register():
     bpy.types.Scene.compify_footage = bpy.props.PointerProperty(
         type=bpy.types.Image,
         name="Footage Texture",
+        update=change_footage_material_clip,
     )
     bpy.types.Scene.compify_footage_camera = bpy.props.PointerProperty(
         type=bpy.types.Object,
         name="Footage Camera",
+        poll=lambda scene, obj : obj.type == 'CAMERA',
+        update=change_footage_camera,
     )
     bpy.types.Scene.compify_footage_geo_collection = bpy.props.PointerProperty(
         type=bpy.types.Collection,
