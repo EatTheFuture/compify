@@ -74,11 +74,11 @@ class CompifyPanel(bpy.types.Panel):
         col = layout.column()
         col.label(text="    Footage:")
         box = col.box()
-        box.template_ID(context.scene, "compify_footage", open="image.open")
+        box.template_ID(context.scene.compify_config, "footage", open="image.open")
         box.use_property_split = True
-        if context.scene.compify_footage != None:
-            box.prop(context.scene.compify_footage.colorspace_settings, "name", text="  Color Space")
-        box.prop(context.scene, "compify_footage_camera", text="  Camera")
+        if context.scene.compify_config.footage != None:
+            box.prop(context.scene.compify_config.footage.colorspace_settings, "name", text="  Color Space")
+        box.prop(context.scene.compify_config, "camera", text="  Camera")
 
         layout.separator(factor=0.5)
 
@@ -89,11 +89,11 @@ class CompifyPanel(bpy.types.Panel):
         box.use_property_split = True
 
         row1 = box.row()
-        row1.prop(context.scene, "compify_footage_geo_collection", text="  Footage Geo")
+        row1.prop(context.scene.compify_config, "geo_collection", text="  Footage Geo")
         row1.operator("scene.compify_add_footage_geo_collection", text="", icon='ADD')
 
         row2 = box.row()
-        row2.prop(context.scene, "compify_footage_lights_collection", text="  Footage Lights")
+        row2.prop(context.scene.compify_config, "lights_collection", text="  Footage Lights")
         row2.operator("scene.compify_add_footage_lights_collection", text="", icon='ADD')
 
         layout.separator(factor=1.0)
@@ -162,8 +162,8 @@ def ensure_compify_material(context, baking_res=(1024, 1024)):
 
         return create_compify_material(
             compify_mat_name(context),
-            context.scene.compify_footage_camera,
-            context.scene.compify_footage,
+            context.scene.compify_config.camera,
+            context.scene.compify_config.footage,
             bake_image,
         )
 
@@ -249,22 +249,22 @@ def create_compify_material(name, camera, footage, bake_image=None):
     return mat
 
 
-def change_footage_material_clip(scene, context):
-    if scene.compify_footage == None:
+def change_footage_material_clip(config, context):
+    if config.footage == None:
         return
     mat = get_compify_material(context)
     if mat != None:
         footage_node = mat.node_tree.nodes["Input Footage"]
-        footage_node.image = scene.compify_footage
-        footage_node.image_user.frame_duration = scene.compify_footage.frame_duration
+        footage_node.image = config.footage
+        footage_node.image_user.frame_duration = config.footage.frame_duration
 
 
-def change_footage_camera(scene, context):
-    if scene.compify_footage_camera == None or scene.compify_footage_camera.type != 'CAMERA':
+def change_footage_camera(config, context):
+    if config.camera == None or config.camera.type != 'CAMERA':
         return
     mat = get_compify_material(context)
     if mat != None:
-        group = ensure_camera_project_group(scene.compify_footage_camera)
+        group = ensure_camera_project_group(config.camera)
         mat.node_tree.nodes["Camera Project"].node_tree = group
 
 
@@ -277,14 +277,14 @@ class CompifyPrepScene(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         return context.mode == 'OBJECT' \
-            and context.scene.compify_footage != None \
-            and context.scene.compify_footage_camera != None \
-            and context.scene.compify_footage_geo_collection != None \
-            and len(context.scene.compify_footage_geo_collection.all_objects) > 0
+            and context.scene.compify_config.footage != None \
+            and context.scene.compify_config.camera != None \
+            and context.scene.compify_config.geo_collection != None \
+            and len(context.scene.compify_config.geo_collection.all_objects) > 0
 
     def execute(self, context):
-        proxy_collection = context.scene.compify_footage_geo_collection
-        lights_collection = context.scene.compify_footage_lights_collection
+        proxy_collection = context.scene.compify_config.geo_collection
+        lights_collection = context.scene.compify_config.lights_collection
         material = ensure_compify_material(context)
 
         # Deselect all objects.
@@ -342,10 +342,10 @@ class CompifyBake(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         return context.mode == 'OBJECT' \
-            and context.scene.compify_footage != None \
-            and context.scene.compify_footage_camera != None \
-            and context.scene.compify_footage_geo_collection != None \
-            and len(context.scene.compify_footage_geo_collection.all_objects) > 0
+            and context.scene.compify_config.footage != None \
+            and context.scene.compify_config.camera != None \
+            and context.scene.compify_config.geo_collection != None \
+            and len(context.scene.compify_config.geo_collection.all_objects) > 0
 
     def execute(self, context):
         # Clear operator fields.  Not strictly necessary, since they
@@ -356,12 +356,12 @@ class CompifyBake(bpy.types.Operator):
         self.main_node = None
 
         # Misc setup and checks.
-        if context.scene.compify_footage_geo_collection == None:
+        if context.scene.compify_config.geo_collection == None:
             return {'CANCELLED'}
-        proxy_objects = context.scene.compify_footage_geo_collection.objects
+        proxy_objects = context.scene.compify_config.geo_collection.objects
         proxy_lights = []
-        if context.scene.compify_footage_lights_collection != None:
-            proxy_lights = context.scene.compify_footage_lights_collection.objects
+        if context.scene.compify_config.lights_collection != None:
+            proxy_lights = context.scene.compify_config.lights_collection.objects
         material = bpy.data.materials[compify_mat_name(context)]
         self.main_node = material.node_tree.nodes[MAIN_NODE_NAME]
         delight_image_node = material.node_tree.nodes[BAKE_IMAGE_NODE_NAME]
@@ -460,12 +460,12 @@ class CompifyAddFootageGeoCollection(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.compify_footage_geo_collection == None
+        return context.scene.compify_config.geo_collection == None
 
     def execute(self, context):
         collection = bpy.data.collections.new("Footage Geo")
         context.scene.collection.children.link(collection)
-        context.scene.compify_footage_geo_collection = collection
+        context.scene.compify_config.geo_collection = collection
         return {'FINISHED'}
 
 
@@ -477,12 +477,12 @@ class CompifyAddFootageLightsCollection(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.compify_footage_lights_collection == None
+        return context.scene.compify_config.lights_collection == None
 
     def execute(self, context):
         collection = bpy.data.collections.new("Footage Lights")
         context.scene.collection.children.link(collection)
-        context.scene.compify_footage_lights_collection = collection
+        context.scene.compify_config.lights_collection = collection
         return {'FINISHED'}
 
 
@@ -504,46 +504,56 @@ class CompifyCameraProjectGroupNew(bpy.types.Operator):
 #========================================================
 
 
-def register():
-    bpy.utils.register_class(CompifyPanel)
-    bpy.utils.register_class(CompifyCameraPanel)
-    # bpy.utils.register_class(CompifyMaterialNew)
-    bpy.utils.register_class(CompifyAddFootageGeoCollection)
-    bpy.utils.register_class(CompifyAddFootageLightsCollection)
-    bpy.utils.register_class(CompifyPrepScene)
-    bpy.utils.register_class(CompifyBake)
-    bpy.utils.register_class(CompifyCameraProjectGroupNew)
-
-    # Custom properties.
-    bpy.types.Scene.compify_footage = bpy.props.PointerProperty(
+class CompifyFootageConfig(bpy.types.PropertyGroup):
+    footage: bpy.props.PointerProperty(
         type=bpy.types.Image,
         name="Footage Texture",
         update=change_footage_material_clip,
     )
-    bpy.types.Scene.compify_footage_camera = bpy.props.PointerProperty(
+    camera: bpy.props.PointerProperty(
         type=bpy.types.Object,
         name="Footage Camera",
         poll=lambda scene, obj : obj.type == 'CAMERA',
         update=change_footage_camera,
     )
-    bpy.types.Scene.compify_footage_geo_collection = bpy.props.PointerProperty(
+    geo_collection: bpy.props.PointerProperty(
         type=bpy.types.Collection,
         name="Footage Geo Collection",
     )
-    bpy.types.Scene.compify_footage_lights_collection = bpy.props.PointerProperty(
+    lights_collection: bpy.props.PointerProperty(
         type=bpy.types.Collection,
         name="Footage Lights Collection",
     )
 
+
+#========================================================
+
+
+def register():
+    bpy.utils.register_class(CompifyPanel)
+    bpy.utils.register_class(CompifyCameraPanel)
+    bpy.utils.register_class(CompifyAddFootageGeoCollection)
+    bpy.utils.register_class(CompifyAddFootageLightsCollection)
+    bpy.utils.register_class(CompifyPrepScene)
+    bpy.utils.register_class(CompifyBake)
+    bpy.utils.register_class(CompifyCameraProjectGroupNew)
+    bpy.utils.register_class(CompifyFootageConfig)
+
+    # Custom properties.
+    bpy.types.Scene.compify_config = bpy.props.PointerProperty(type=CompifyFootageConfig)
+
 def unregister():
     bpy.utils.unregister_class(CompifyPanel)
     bpy.utils.unregister_class(CompifyCameraPanel)
-    # bpy.utils.unregister_class(CompifyMaterialNew)
     bpy.utils.unregister_class(CompifyAddFootageGeoCollection)
     bpy.utils.unregister_class(CompifyAddFootageLightsCollection)
     bpy.utils.unregister_class(CompifyPrepScene)
     bpy.utils.unregister_class(CompifyBake)
     bpy.utils.unregister_class(CompifyCameraProjectGroupNew)
+    bpy.utils.unregister_class(CompifyFootageConfig)
+
+    # Custom properties.
+    del bpy.types.Scene.compify_config
 
 
 if __name__ == "__main__":
