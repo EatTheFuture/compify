@@ -36,6 +36,7 @@ from .node_groups import \
     ensure_footage_group, \
     ensure_camera_project_group, \
     ensure_feathered_square_group
+from .uv_utils import leftmost_u
 
 MAIN_NODE_NAME = "Compify Footage"
 BAKE_IMAGE_NODE_NAME = "Baked Lighting"
@@ -99,6 +100,7 @@ class CompifyPanel(bpy.types.Panel):
         layout.separator(factor=1.0)
 
         layout.use_property_split = True
+        layout.prop(context.scene.compify_config, "bake_uv_margin")
         layout.prop(context.scene.compify_config, "bake_image_res")
 
         layout.separator(factor=1.0)
@@ -301,11 +303,27 @@ class CompifyPrepScene(bpy.types.Operator):
         bpy.ops.mesh.select_all(action='SELECT')
         bpy.ops.uv.smart_project(
             angle_limit=(math.pi/180)*60, # 60 degrees
-            island_margin=0.005,
+            island_margin=0.001,
             area_weight=0.0,
             correct_aspect=False,
-            scale_to_bounds=True,
+            scale_to_bounds=False,
         )
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        # We have to do the UV island margins twice, because Blender's
+        # `island_margin` is stupid beyond belief and corresponds to
+        # nothing absolute that we can depend on.  So what we're doing
+        # here is saying, "Hey, what was the actual margin achieved
+        # with `island_margin=0.001`?  Okay, now let's redo it based on
+        # that result."  It's still not 100% precise even with this,
+        # but with a bit of buffer it's close enough.
+        actual_margin = leftmost_u(context.selected_objects, UV_LAYER_NAME)
+        actual_margin_pixels = actual_margin * context.scene.compify_config.bake_image_res
+        target_margin_with_buffer = context.scene.compify_config.bake_uv_margin * (5.0 / 4.0)
+        correction_factor = target_margin_with_buffer / actual_margin_pixels
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.uv.select_all(action='SELECT') 
+        bpy.ops.uv.pack_islands(rotate=False, margin = 0.001 * correction_factor)
         bpy.ops.object.mode_set(mode='OBJECT')
 
         return {'FINISHED'}
@@ -333,7 +351,8 @@ class CompifyBake(bpy.types.Operator):
             and context.scene.compify_config.footage != None \
             and context.scene.compify_config.camera != None \
             and context.scene.compify_config.geo_collection != None \
-            and len(context.scene.compify_config.geo_collection.all_objects) > 0
+            and len(context.scene.compify_config.geo_collection.all_objects) > 0 \
+            and compify_mat_name(context) in bpy.data.materials
 
     def execute(self, context):
         # Clear operator fields.  Not strictly necessary, since they
@@ -421,7 +440,7 @@ class CompifyBake(bpy.types.Operator):
                     # filepath='',
                     # width=512,
                     # height=512,
-                    margin=4,
+                    margin=context.scene.compify_config.bake_uv_margin,
                     margin_type='EXTEND',
                     use_selected_to_active=False,
                     max_ray_distance=0.0,
@@ -533,6 +552,15 @@ class CompifyFootageConfig(bpy.types.PropertyGroup):
     lights_collection: bpy.props.PointerProperty(
         type=bpy.types.Collection,
         name="Footage Lights Collection",
+    )
+    bake_uv_margin: bpy.props.IntProperty(
+        name="Bake UV Margin",
+        subtype='PIXEL',
+        options=set(), # Not animatable.
+        default=4,
+        min=0,
+        max=2**16,
+        soft_max=32,
     )
     bake_image_res: bpy.props.IntProperty(
         name="Bake Resolution",
