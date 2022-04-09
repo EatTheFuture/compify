@@ -98,6 +98,11 @@ class CompifyPanel(bpy.types.Panel):
 
         layout.separator(factor=1.0)
 
+        layout.use_property_split = True
+        layout.prop(context.scene.compify_config, "bake_image_res")
+
+        layout.separator(factor=1.0)
+
         #--------
         layout.operator("material.compify_prep_scene")
         layout.operator("material.compify_bake")
@@ -140,36 +145,20 @@ def get_compify_material(context):
 # Ensures that the Compify Footage material exists for this scene.
 #
 # It will create it if it doesn't exist, and returns the material.
-def ensure_compify_material(context, baking_res=(1024, 1024)):
+def ensure_compify_material(context):
     mat = get_compify_material(context)
     if mat != None:
         return mat
     else:
-        bake_image_name = compify_baked_texture_name(context)
-        bake_image = None
-        if bake_image_name in bpy.data.images:
-            bake_image = bpy.data.images[bake_image_name]
-        else:
-            bake_image = bpy.data.images.new(
-                bake_image_name,
-                baking_res[0], baking_res[1],
-                alpha=False,
-                float_buffer=True,
-                stereo3d=False,
-                is_data=False,
-                tiled=False,
-            )
-
         return create_compify_material(
             compify_mat_name(context),
             context.scene.compify_config.camera,
             context.scene.compify_config.footage,
-            bake_image,
         )
 
 
 # Creates a Compify Footage material.
-def create_compify_material(name, camera, footage, bake_image=None):
+def create_compify_material(name, camera, footage):
     # Create a new completely empty node-based material.
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
@@ -234,7 +223,6 @@ def create_compify_material(name, camera, footage, bake_image=None):
     feathered_square.inputs['Feather'].default_value = 0.05
     feathered_square.inputs['Dilate'].default_value = 0.0
 
-    baked_lighting.image = bake_image
     compify_footage.node_tree = ensure_footage_group()
 
     # Hook up the nodes.
@@ -368,6 +356,28 @@ class CompifyBake(bpy.types.Operator):
 
         if len(proxy_objects) == 0:
             return {'CANCELLED'}
+
+        # Ensure we have an image of the right resolution to bake to.
+        bake_image_name = compify_baked_texture_name(context)
+        bake_res = context.scene.compify_config.bake_image_res
+        if bake_image_name in bpy.data.images \
+        and bpy.data.images[bake_image_name].resolution[0] != bake_res:
+            bpy.data.images.remove(bpy.data.images[bake_image_name])
+
+        bake_image = None
+        if bake_image_name in bpy.data.images:
+            bake_image = bpy.data.images[bake_image_name]
+        else:
+            bake_image = bpy.data.images.new(
+                bake_image_name,
+                bake_res, bake_res,
+                alpha=False,
+                float_buffer=True,
+                stereo3d=False,
+                is_data=False,
+                tiled=False,
+            )
+        delight_image_node.image = bake_image
 
         # Configure the material for baking mode.
         self.main_node.inputs["Do Bake"].default_value = 1.0
@@ -523,6 +533,15 @@ class CompifyFootageConfig(bpy.types.PropertyGroup):
     lights_collection: bpy.props.PointerProperty(
         type=bpy.types.Collection,
         name="Footage Lights Collection",
+    )
+    bake_image_res: bpy.props.IntProperty(
+        name="Bake Resolution",
+        subtype='PIXEL',
+        options=set(), # Not animatable.
+        default=1024,
+        min=64,
+        max=2**16,
+        soft_max=8192,
     )
 
 
