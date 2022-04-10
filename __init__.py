@@ -205,6 +205,7 @@ def create_compify_material(name, camera, footage):
     baked_lighting.location = (x, -200.0)
     x += hs
     compify_footage.location = (x, 0.0)
+    compify_footage.width = 200.0
     x += hs
     output.location = (x, 0.0)
 
@@ -232,7 +233,7 @@ def create_compify_material(name, camera, footage):
     mat.node_tree.links.new(camera_project.outputs['Vector'], feathered_square.inputs['Vector'])
     mat.node_tree.links.new(baking_uv_map.outputs['UV'], baked_lighting.inputs['Vector'])
     mat.node_tree.links.new(input_footage.outputs['Color'], compify_footage.inputs['Footage'])
-    mat.node_tree.links.new(feathered_square.outputs['Value'], compify_footage.inputs['Footage-Background Mask'])
+    mat.node_tree.links.new(feathered_square.outputs['Value'], compify_footage.inputs['Footage Alpha'])
     mat.node_tree.links.new(baked_lighting.outputs['Color'], compify_footage.inputs['Baked Lighting'])
     mat.node_tree.links.new(compify_footage.outputs['Shader'], output.inputs['Surface'])
 

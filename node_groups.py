@@ -19,9 +19,15 @@ def ensure_footage_group():
     group.inputs['Footage'].default_value = (1.0, 0.0, 1.0, 1.0)
     group.inputs['Footage'].hide_value = True
 
+    group.inputs.new(type="NodeSocketFloat", name="Footage Alpha")
+    group.inputs['Footage Alpha'].default_value = 1.0
+    group.inputs['Footage Alpha'].min_value = 0.0
+    group.inputs['Footage Alpha'].max_value = 1.0
+
     group.inputs.new(type="NodeSocketFloat", name="Footage Emit")
     group.inputs['Footage Emit'].default_value = 0.0
-    group.inputs['Footage Emit'].hide_value = True
+    group.inputs['Footage Emit'].min_value = 0.0
+    group.inputs['Footage Emit'].max_value = 1.0
 
     group.inputs.new(type="NodeSocketColor", name="Background")
     group.inputs['Background'].default_value = (1.0, 0.0, 1.0, 1.0)
@@ -36,10 +42,6 @@ def ensure_footage_group():
     group.inputs['Background Emit'].default_value = 0.0
     group.inputs['Background Emit'].min_value = 0.0
     group.inputs['Background Emit'].max_value = 1.0
-
-    group.inputs.new(type="NodeSocketFloat", name="Footage-Background Mask")
-    group.inputs['Footage-Background Mask'].default_value = 1.0
-    group.inputs['Footage-Background Mask'].hide_value = True
 
     group.inputs.new(type="NodeSocketColor", name="Baked Lighting")
     group.inputs['Baked Lighting'].default_value = (1.0, 1.0, 1.0, 1.0)
@@ -323,7 +325,7 @@ def ensure_footage_group():
     baking_input.outputs["Footage"].hide = False
     baking_input.outputs["Background"].hide = False
     baking_input.outputs["Background Alpha"].hide = False
-    baking_input.outputs["Footage-Background Mask"].hide = False
+    baking_input.outputs["Footage Alpha"].hide = False
 
     baking_transparent.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
 
@@ -335,7 +337,7 @@ def ensure_footage_group():
     group.links.new(baking_input.outputs['Footage'], baking_2.inputs[2])
     group.links.new(baking_input.outputs['Background'], baking_1.inputs[2])
     group.links.new(baking_input.outputs['Background Alpha'], baking_1.inputs['Fac'])
-    group.links.new(baking_input.outputs['Footage-Background Mask'], baking_2.inputs['Fac'])
+    group.links.new(baking_input.outputs['Footage Alpha'], baking_2.inputs['Fac'])
     group.links.new(baking_1.outputs['Shader'], baking_2.inputs[1])
     group.links.new(baking_2.outputs['Shader'], baking_3.inputs[1])
     group.links.new(baking_diffuse.outputs['BSDF'], baking_3.inputs[2])
@@ -378,11 +380,11 @@ def ensure_footage_group():
     # Configure the nodes.
     for socket in mix_input.outputs:
         socket.hide = True
-    mix_input.outputs["Footage-Background Mask"].hide = False
+    mix_input.outputs["Footage Alpha"].hide = False
     mix_input.outputs["Do Bake"].hide = False
 
     # Hook up the nodes.
-    group.links.new(mix_input.outputs['Footage-Background Mask'], background_mask.inputs['Fac'])
+    group.links.new(mix_input.outputs['Footage Alpha'], background_mask.inputs['Fac'])
     group.links.new(mix_input.outputs['Do Bake'], bake_switch.inputs['Fac'])
     group.links.new(background_mask.outputs['Shader'], camera_switch.inputs[1])
     group.links.new(camera_switch.outputs['Shader'], bake_switch.inputs[1])
@@ -643,9 +645,7 @@ def ensure_camera_project_group(camera):
     input = group.nodes.new(type='NodeGroupInput')
     output = group.nodes.new(type='NodeGroupOutput')
 
-    geometry = group.nodes.new(type='ShaderNodeNewGeometry')
-    camera_loc = group.nodes.new(type='ShaderNodeCombineXYZ')
-    camera_rot = group.nodes.new(type='ShaderNodeCombineXYZ')
+    camera_transform = group.nodes.new(type='ShaderNodeTexCoord')
     lens = group.nodes.new(type='ShaderNodeValue')
     sensor_width = group.nodes.new(type='ShaderNodeValue')
     lens_shift_x = group.nodes.new(type='ShaderNodeValue')
@@ -657,8 +657,6 @@ def ensure_camera_project_group(camera):
     to_radians = group.nodes.new(type='ShaderNodeMath')
     user_location = group.nodes.new(type='ShaderNodeCombineXYZ')
 
-    camera_transform_1 = group.nodes.new(type='ShaderNodeVectorMath')
-    camera_transform_2 = group.nodes.new(type='ShaderNodeVectorRotate')
     perspective_1 = group.nodes.new(type='ShaderNodeSeparateXYZ')
     perspective_2 = group.nodes.new(type='ShaderNodeMath')
     perspective_3 = group.nodes.new(type='ShaderNodeMath')
@@ -675,8 +673,7 @@ def ensure_camera_project_group(camera):
     
     #--------------------
     # Label the nodes.
-    camera_loc.label = "Camera Loc"
-    camera_rot.label = "Camera Rot"
+    camera_transform.label = "Camera Transform"
     lens.label = "Lens"
     sensor_width.label = "Sensor Width"
     lens_shift_x.label = "Lens Shift X"
@@ -688,8 +685,6 @@ def ensure_camera_project_group(camera):
     to_radians.label = "Degrees to Radians"
     user_location.label = "User Location"
 
-    camera_transform_1.label = "Camera Transform 1"
-    camera_transform_2.label = "Camera Transform 2"
     perspective_1.label = "Perspective 1"
     perspective_2.label = "Perspective 2"
     perspective_3.label = "Perspective 3"
@@ -709,9 +704,7 @@ def ensure_camera_project_group(camera):
     hs = 250.0
     x = 0.0
 
-    geometry.location = (x, 0.0)
-    camera_loc.location = (x, -300.0)
-    camera_rot.location = (x, -500.0)
+    camera_transform.location = (x, 0.0)
     lens.location = (x, -700.0)
     sensor_width.location = (x, -900.0)
     lens_shift_x.location = (x, -1100.0)
@@ -726,12 +719,6 @@ def ensure_camera_project_group(camera):
 
     x += hs
     zoom_2.location = (x, -700.0)
-
-    x += hs
-    camera_transform_1.location = (x, 0.0)
-
-    x += hs
-    camera_transform_2.location = (x, 0.0)
 
     x += hs
     perspective_1.location = (x, 0.0)
@@ -768,55 +755,6 @@ def ensure_camera_project_group(camera):
     #---------------------
     # Set up the drivers.
 
-    # Camera location drivers.
-    drv_loc_x = camera_loc.inputs['X'].driver_add("default_value").driver
-    drv_loc_y = camera_loc.inputs['Y'].driver_add("default_value").driver
-    drv_loc_z = camera_loc.inputs['Z'].driver_add("default_value").driver
-    drv_loc_x.type = 'SUM'
-    drv_loc_y.type = 'SUM'
-    drv_loc_z.type = 'SUM'
-    var_x = drv_loc_x.variables.new()
-    var_y = drv_loc_y.variables.new()
-    var_z = drv_loc_z.variables.new()
-    var_x.type = 'TRANSFORMS'
-    var_y.type = 'TRANSFORMS'
-    var_z.type = 'TRANSFORMS'
-    var_x.targets[0].id = camera
-    var_y.targets[0].id = camera
-    var_z.targets[0].id = camera
-    var_x.targets[0].transform_type = 'LOC_X'
-    var_y.targets[0].transform_type = 'LOC_Y'
-    var_z.targets[0].transform_type = 'LOC_Z'
-    var_x.targets[0].transform_space = 'WORLD_SPACE'
-    var_y.targets[0].transform_space = 'WORLD_SPACE'
-    var_z.targets[0].transform_space = 'WORLD_SPACE'
-
-    # Camera rotation drivers.
-    drv_rot_x = camera_rot.inputs['X'].driver_add("default_value").driver
-    drv_rot_y = camera_rot.inputs['Y'].driver_add("default_value").driver
-    drv_rot_z = camera_rot.inputs['Z'].driver_add("default_value").driver
-    drv_rot_x.type = 'SUM'
-    drv_rot_y.type = 'SUM'
-    drv_rot_z.type = 'SUM'
-    var_x = drv_rot_x.variables.new()
-    var_y = drv_rot_y.variables.new()
-    var_z = drv_rot_z.variables.new()
-    var_x.type = 'TRANSFORMS'
-    var_y.type = 'TRANSFORMS'
-    var_z.type = 'TRANSFORMS'
-    var_x.targets[0].id = camera
-    var_y.targets[0].id = camera
-    var_z.targets[0].id = camera
-    var_x.targets[0].rotation_mode = 'XYZ'
-    var_y.targets[0].rotation_mode = 'XYZ'
-    var_z.targets[0].rotation_mode = 'XYZ'
-    var_x.targets[0].transform_type = 'ROT_X'
-    var_y.targets[0].transform_type = 'ROT_Y'
-    var_z.targets[0].transform_type = 'ROT_Z'
-    var_x.targets[0].transform_space = 'WORLD_SPACE'
-    var_y.targets[0].transform_space = 'WORLD_SPACE'
-    var_z.targets[0].transform_space = 'WORLD_SPACE'
-
     drv_lens = lens.outputs['Value'].driver_add("default_value").driver
     drv_lens.type = 'SUM'
     var = drv_lens.variables.new()
@@ -851,6 +789,8 @@ def ensure_camera_project_group(camera):
 
     #----------------------
     # Configure the nodes.
+    camera_transform.object = camera
+
     zoom_1.operation = 'DIVIDE'
     zoom_1.use_clamp = False
     zoom_2.operation = 'MULTIPLY'
@@ -862,10 +802,6 @@ def ensure_camera_project_group(camera):
     to_radians.inputs[1].default_value = math.pi / 180.0
     user_location.inputs[2].default_value = 0.0
 
-    camera_transform_1.operation = 'SUBTRACT'
-    camera_transform_2.rotation_type = 'EULER_XYZ'
-    camera_transform_2.invert = True
-    camera_transform_2.inputs['Center'].default_value = (0.0, 0.0, 0.0)
     perspective_2.operation = 'DIVIDE'
     perspective_2.use_clamp = False
     perspective_3.operation = 'DIVIDE'
@@ -886,9 +822,7 @@ def ensure_camera_project_group(camera):
 
     #--------------------
     # Hook up the nodes.
-    group.links.new(geometry.outputs['Position'], camera_transform_1.inputs[0])
-    group.links.new(camera_loc.outputs['Vector'], camera_transform_1.inputs[1])
-    group.links.new(camera_rot.outputs['Vector'], camera_transform_2.inputs['Rotation'])
+    group.links.new(camera_transform.outputs['Object'], perspective_1.inputs['Vector'])
     group.links.new(lens.outputs['Value'], zoom_1.inputs[0])
     group.links.new(sensor_width.outputs['Value'], zoom_1.inputs[1])
     group.links.new(zoom_1.outputs['Value'], zoom_2.inputs[0])
@@ -904,8 +838,6 @@ def ensure_camera_project_group(camera):
     group.links.new(input.outputs['Loc Y'], user_location.inputs['Y'])
     group.links.new(user_location.outputs['Vector'], user_translate.inputs[1])
 
-    group.links.new(camera_transform_1.outputs['Vector'], camera_transform_2.inputs['Vector'])
-    group.links.new(camera_transform_2.outputs['Vector'], perspective_1.inputs['Vector'])
     group.links.new(perspective_1.outputs['X'], perspective_2.inputs[0])
     group.links.new(perspective_1.outputs['Y'], perspective_3.inputs[0])
     group.links.new(perspective_1.outputs['Z'], perspective_2.inputs[1])
