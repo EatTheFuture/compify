@@ -437,7 +437,7 @@ class CompifyBake(bpy.types.Operator):
                 bpy.ops.object.bake(
                     "INVOKE_DEFAULT",
                     type='DIFFUSE',
-                    # pass_filter={},
+                    pass_filter={'DIRECT', 'INDIRECT', 'COLOR'},
                     # filepath='',
                     # width=512,
                     # height=512,
