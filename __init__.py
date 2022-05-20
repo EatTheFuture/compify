@@ -338,7 +338,9 @@ class CompifyBake(bpy.types.Operator):
 
     # Operator fields, for keeping track of state during modal operation.
     _timer = None
-    is_started = False
+    is_baking = False
+    bake_objects = []
+    proxy_objects = []
     hide_render_list = {}
     main_node = None
 
@@ -355,18 +357,28 @@ class CompifyBake(bpy.types.Operator):
             and len(context.scene.compify_config.geo_collection.all_objects) > 0 \
             and compify_mat_name(context) in bpy.data.materials
 
+    def post(self, scene, context=None):
+        self.is_baking = False
+
+    def cancelled(self, scene, context=None):
+        self.is_baking = False
+        self.bake_objects = []
+
     def execute(self, context):
         # Clear operator fields.  Not strictly necessary, since they
         # should be cleared at the end of the bake.  But just in case.
         self._timer = None
-        self.is_started = False
+        self.is_baking = False
+        self.bake_objects = []
+        self.proxy_objects = []
         self.hide_render_list = {}
         self.main_node = None
 
         # Misc setup and checks.
         if context.scene.compify_config.geo_collection == None:
             return {'CANCELLED'}
-        proxy_objects = context.scene.compify_config.geo_collection.objects
+        self.proxy_objects = context.scene.compify_config.geo_collection.objects
+        self.bake_objects = list(self.proxy_objects)
         proxy_lights = []
         if context.scene.compify_config.lights_collection != None:
             proxy_lights = context.scene.compify_config.lights_collection.objects
@@ -374,7 +386,7 @@ class CompifyBake(bpy.types.Operator):
         self.main_node = material.node_tree.nodes[MAIN_NODE_NAME]
         delight_image_node = material.node_tree.nodes[BAKE_IMAGE_NODE_NAME]
 
-        if len(proxy_objects) == 0:
+        if len(self.bake_objects) == 0:
             return {'CANCELLED'}
 
         # Ensure we have an image of the right resolution to bake to.
@@ -405,25 +417,26 @@ class CompifyBake(bpy.types.Operator):
         delight_image_node.select = True
         material.node_tree.nodes.active = delight_image_node
 
-        # Select all proxy geometry objects, and nothing else.
+        # Deselect everything.
         for obj in context.scene.objects:
             obj.select_set(False)
-        for obj in proxy_objects:
-            obj.select_set(True)
-        context.view_layer.objects.active = proxy_objects[0]
 
         # Build a dictionary of the visibility of non-proxy objects so that
         # we can restore it afterwards.
         for obj in context.scene.objects:
-            if obj.name not in proxy_objects and obj.name not in proxy_lights:
+            if obj.name not in self.proxy_objects and obj.name not in proxy_lights:
                 self.hide_render_list[obj.name] = obj.hide_render
 
         # Make all non-proxy objects invisible.
         for obj_name in self.hide_render_list:
             bpy.data.objects[obj_name].hide_render = True
 
+        # Set up the baking job event handlers.
+        bpy.app.handlers.bake_job_complete.append(self.post)
+        bpy.app.handlers.bake_job_cancel.append(self.cancelled)
+
         # Set up the timer.
-        self._timer = context.window_manager.event_timer_add(0.5, window=context.window)
+        self._timer = context.window_manager.event_timer_add(0.05, window=context.window)
         context.window_manager.modal_handler_add(self)
 
         return {'RUNNING_MODAL'}
@@ -431,8 +444,17 @@ class CompifyBake(bpy.types.Operator):
 
     def modal(self, context, event):
         if event.type == 'TIMER':
-            if not self.is_started:
-                self.is_started = True
+            if len(self.bake_objects) > 0 and not self.is_baking:
+                self.is_baking = True
+                do_clear = len(self.bake_objects) == len(self.proxy_objects)
+
+                # Get next object to bake and make it the only selected object.
+                bake_object = self.bake_objects.pop(0)
+                for obj in self.proxy_objects:
+                    obj.select_set(False)
+                bake_object.select_set(True)
+                context.view_layer.objects.active = bake_object
+
                 # Do the bake.
                 bpy.ops.object.bake(
                     "INVOKE_DEFAULT",
@@ -453,16 +475,17 @@ class CompifyBake(bpy.types.Operator):
                     normal_b='POS_Z',
                     target='IMAGE_TEXTURES',
                     save_mode='INTERNAL',
-                    use_clear=True,
+                    use_clear=do_clear,
                     use_cage=False,
                     use_split_materials=False,
                     use_automatic_name=False,
                     uv_layer='',
                 )
-            # elif not self.is_baking:
-            else:
+            elif len(self.bake_objects) <= 0:
                 # Clean up the handlers and timer.
                 context.window_manager.event_timer_remove(self._timer)
+                bpy.app.handlers.bake_job_complete.remove(self.post)
+                bpy.app.handlers.bake_job_cancel.remove(self.cancelled)
                 self._timer = None
 
                 # Restore visibility of non-proxy objects.
@@ -475,7 +498,9 @@ class CompifyBake(bpy.types.Operator):
                 self.main_node = None
 
                 # Reset other self properties.
-                self.is_started = False
+                self.is_baking = False
+                self.bake_objects = []
+                self.proxy_objects = []
 
                 return {'FINISHED'}
 
