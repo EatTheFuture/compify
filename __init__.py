@@ -20,7 +20,7 @@ bl_info = {
     "name": "Compify",
     "version": (0, 1, 0),
     "author": "Nathan Vegdahl, Ian Hubert",
-    "blender": (3, 0, 0),
+    "blender": (3, 3, 0),
     "description": "Do compositing in 3D space.",
     "location": "Scene properties",
     # "doc_url": "",
@@ -37,6 +37,7 @@ from .node_groups import \
     ensure_camera_project_group, \
     ensure_feathered_square_group
 from .uv_utils import leftmost_u
+from .camera_align import camera_align_register, camera_align_unregister
 
 MAIN_NODE_NAME = "Compify Footage"
 BAKE_IMAGE_NODE_NAME = "Baked Lighting"
@@ -612,6 +613,9 @@ def register():
     # Custom properties.
     bpy.types.Scene.compify_config = bpy.props.PointerProperty(type=CompifyFootageConfig)
 
+    # Other modules.
+    camera_align_register()
+
 def unregister():
     bpy.utils.unregister_class(CompifyPanel)
     bpy.utils.unregister_class(CompifyCameraPanel)
@@ -624,6 +628,9 @@ def unregister():
 
     # Custom properties.
     del bpy.types.Scene.compify_config
+
+    # Other modules.
+    camera_align_unregister()
 
 
 if __name__ == "__main__":
