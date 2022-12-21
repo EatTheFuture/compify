@@ -1,9 +1,10 @@
 import bpy
+from mathutils import Vector, Matrix
 
 
 class CompifyCameraAlignPanel(bpy.types.Panel):
     """Align multiple tracked cameras to each other."""
-    bl_label = "Align Cameras"
+    bl_label = "Align Camera Track"
     bl_idname = "DATA_PT_compify_camera_align"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -87,7 +88,73 @@ class CompifyCameraAlignTransform(bpy.types.Operator):
         obj = context.active_object
         align_points = context.scene.compify_align_points
 
-        # TODO: the actual alignment math.
+        from_1 = Vector(align_points[0].track_point)
+        from_2 = Vector(align_points[1].track_point)
+        from_3 = Vector(align_points[2].track_point)
+        to_1 = Vector(align_points[0].scene_point)
+        to_2 = Vector(align_points[1].scene_point)
+        to_3 = Vector(align_points[2].scene_point)
+
+        # Determine relative scale of the two coordinate systems.
+        from_scale = ((from_2 - from_1).length + (from_3 - from_1).length) / 2.0
+        to_scale = ((to_2 - to_1).length + (to_3 - to_1).length) / 2.0
+        scale = to_scale / from_scale
+
+        # Build normalized orthogonal coordinate systems for rotation.
+        from_v1 = from_2 - from_1
+        from_v2 = from_3 - from_1
+        from_v3 = from_v1.cross(from_v2)
+        to_v1 = to_2 - to_1
+        to_v2 = to_3 - to_1
+        to_v3 = to_v1.cross(to_v2)
+        from_axis_1 = from_v1.normalized()
+        from_axis_2 = from_v1.cross(from_v3).normalized()
+        from_axis_3 = from_v3.normalized()
+        to_axis_1 = to_v1.normalized()
+        to_axis_2 = to_v1.cross(to_v3).normalized()
+        to_axis_3 = to_v3.normalized()
+
+        # Build a rotation matrix to transform from one coordinate system to the other.
+        mat1 = Matrix([
+            [from_axis_1[0], from_axis_1[1], from_axis_1[2]],
+            [from_axis_2[0], from_axis_2[1], from_axis_2[2]],
+            [from_axis_3[0], from_axis_3[1], from_axis_3[2]],
+        ])
+        mat2 = Matrix([
+            [to_axis_1[0], to_axis_1[1], to_axis_1[2]],
+            [to_axis_2[0], to_axis_2[1], to_axis_2[2]],
+            [to_axis_3[0], to_axis_3[1], to_axis_3[2]],
+        ])
+        rotation = mat2.inverted_safe() @ mat1
+
+        # Compute the translation offset.
+        from_1b = (rotation @ from_1) * scale
+        translation = to_1 - from_1b
+
+        # Apply scale to the object.
+        obj.scale *= scale
+
+        # Apply rotation to the object.
+        if obj.rotation_mode == 'QUATERNION':
+            obj.rotation_quaternion = (rotation @ obj.rotation_quaternion.to_matrix()).to_quaternion()
+        elif obj.rotation_mode == 'AXIS_ANGLE':
+            obj_mat = Matrix.Rotation(
+                obj.rotation_axis_angle[0],
+                3,
+                Vector(obj.rotation_axis_angle[1:]),
+            )
+            rot = (rotation @ obj_mat).to_quaternion()
+            axis = rot.axis
+            angle = rot.angle
+            obj.rotation_axis_angle[0] = angle
+            obj.rotation_axis_angle[1] = axis[0]
+            obj.rotation_axis_angle[2] = axis[1]
+            obj.rotation_axis_angle[3] = axis[2]
+        else:
+            obj.rotation_euler = (rotation @ obj.rotation_euler.to_matrix()).to_euler(obj.rotation_mode)
+
+        # Apply translation to the object.
+        obj.location = (rotation @ obj.location) * scale + translation
 
         # Set the track points to be equal to the scene points, so
         # double-tapping the align button doesn't un-align after
