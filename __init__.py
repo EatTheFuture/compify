@@ -433,8 +433,8 @@ class CompifyBake(bpy.types.Operator):
             bpy.data.objects[obj_name].hide_render = True
 
         # Set up the baking job event handlers.
-        bpy.app.handlers.bake_job_complete.append(self.post)
-        bpy.app.handlers.bake_job_cancel.append(self.cancelled)
+        bpy.app.handlers.object_bake_complete.append(self.post)
+        bpy.app.handlers.object_bake_cancel.append(self.cancelled)
 
         # Set up the timer.
         self._timer = context.window_manager.event_timer_add(0.05, window=context.window)
@@ -482,8 +482,8 @@ class CompifyBake(bpy.types.Operator):
             elif self.is_done:
                 # Clean up the handlers and timer.
                 context.window_manager.event_timer_remove(self._timer)
-                bpy.app.handlers.bake_job_complete.remove(self.post)
-                bpy.app.handlers.bake_job_cancel.remove(self.cancelled)
+                bpy.app.handlers.object_bake_complete.remove(self.post)
+                bpy.app.handlers.object_bake_cancel.remove(self.cancelled)
                 self._timer = None
 
                 # Restore visibility of non-proxy objects.
