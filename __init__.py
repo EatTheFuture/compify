@@ -446,8 +446,14 @@ class CompifyRender(bpy.types.Operator):
             elif self.stage == "render":
                 if not self.render_started:
                     self.render_started = True
-                    bpy.ops.render.render("INVOKE_DEFAULT", animation=False, write_still=True)
+                    bpy.ops.render.render("INVOKE_DEFAULT", animation=False)
                 elif self.render_done:
+                    image_path_start = bpy.path.abspath(context.scene.render.filepath)
+                    image_ext = context.scene.render.file_extension
+                    image_path = "{}{:04}{}".format(image_path_start, context.scene.frame_current, image_ext)
+                    print("Saving image \"{}\"".format(image_path))
+                    bpy.data.images['Render Result'].save_render(filepath=image_path)
+
                     if context.scene.frame_current >= self.frame_range[1]:
                         self.is_finished = True
                     else:
