@@ -32,26 +32,19 @@ import math
 
 import bpy
 
+from .names import \
+    compify_mat_name, \
+    compify_baked_texture_name, \
+    MAIN_NODE_NAME, \
+    BAKE_IMAGE_NODE_NAME, \
+    UV_LAYER_NAME
 from .node_groups import \
     ensure_footage_group, \
     ensure_camera_project_group, \
     ensure_feathered_square_group
 from .uv_utils import leftmost_u
 from .camera_align import camera_align_register, camera_align_unregister
-
-MAIN_NODE_NAME = "Compify Footage"
-BAKE_IMAGE_NODE_NAME = "Baked Lighting"
-UV_LAYER_NAME = 'Compify Baked Lighting'
-
-# Gets the Compify Material name for the active scene.
-def compify_mat_name(context):
-    return "Compify Footage | " + context.scene.name
-
-
-# Gets the Compify baked lighting image name for the active scene.
-def compify_baked_texture_name(context):
-    return "Compify Bake | " + context.scene.name
-
+from .bake import Baker
 
 #========================================================
 
@@ -109,6 +102,7 @@ class CompifyPanel(bpy.types.Panel):
         #--------
         layout.operator("material.compify_prep_scene")
         layout.operator("material.compify_bake")
+        layout.operator("render.compify_render")
 
 
 class CompifyCameraPanel(bpy.types.Panel):
@@ -337,13 +331,8 @@ class CompifyBake(bpy.types.Operator):
     bl_label = "Bake Footage Lighting"
     bl_options = {'UNDO'}
 
-    # Operator fields, for keeping track of state during modal operation.
     _timer = None
-    is_baking = False
-    is_done = False
-    proxy_objects = []
-    hide_render_list = {}
-    main_node = None
+    baker = None
 
     # Note: we use a modal technique inspired by this to keep the baking
     # from blocking the UI:
@@ -359,148 +348,113 @@ class CompifyBake(bpy.types.Operator):
             and compify_mat_name(context) in bpy.data.materials
 
     def post(self, scene, context=None):
-        self.is_baking = False
-        self.is_done = True
+        self.baker.post(scene, context)
 
     def cancelled(self, scene, context=None):
-        self.is_baking = False
-        self.is_done = True
+        self.baker.cancelled(scene, context)
 
     def execute(self, context):
-        # Clear operator fields.  Not strictly necessary, since they
-        # should be cleared at the end of the bake.  But just in case.
-        self._timer = None
-        self.is_baking = False
-        self.is_done = False
-        self.proxy_objects = []
-        self.hide_render_list = {}
-        self.main_node = None
+        self.baker = Baker()
+        self._timer = context.window_manager.event_timer_add(0.05, window=context.window)
+        context.window_manager.modal_handler_add(self)
+        return self.baker.execute(context)
 
-        # Misc setup and checks.
-        if context.scene.compify_config.geo_collection == None:
-            return {'CANCELLED'}
-        self.proxy_objects = context.scene.compify_config.geo_collection.objects
-        proxy_lights = []
-        if context.scene.compify_config.lights_collection != None:
-            proxy_lights = context.scene.compify_config.lights_collection.objects
-        material = bpy.data.materials[compify_mat_name(context)]
-        self.main_node = material.node_tree.nodes[MAIN_NODE_NAME]
-        delight_image_node = material.node_tree.nodes[BAKE_IMAGE_NODE_NAME]
+    def modal(self, context, event):
+        result = self.baker.modal(context, event)
+        if result == {'FINISHED'} or result == {'CANCELLED'}:
+            context.window_manager.event_timer_remove(self._timer)
+        return result
 
-        if len(self.proxy_objects) == 0:
-            return {'CANCELLED'}
 
-        # Ensure we have an image of the right resolution to bake to.
-        bake_image_name = compify_baked_texture_name(context)
-        bake_res = context.scene.compify_config.bake_image_res
-        if bake_image_name in bpy.data.images \
-        and bpy.data.images[bake_image_name].resolution[0] != bake_res:
-            bpy.data.images.remove(bpy.data.images[bake_image_name])
+class CompifyRender(bpy.types.Operator):
+    """Render, but with Compify baking before rendering each frame."""
+    bl_idname = "render.compify_render"
+    bl_label = "Render with Compify Lighting Integration"
 
-        bake_image = None
-        if bake_image_name in bpy.data.images:
-            bake_image = bpy.data.images[bake_image_name]
-        else:
-            bake_image = bpy.data.images.new(
-                bake_image_name,
-                bake_res, bake_res,
-                alpha=False,
-                float_buffer=True,
-                stereo3d=False,
-                is_data=False,
-                tiled=False,
-            )
-        delight_image_node.image = bake_image
+    _timer = None
+    render_started = False
+    render_done = False
+    frame_range = None
+    stage = ""
+    baker = None
 
-        # Configure the material for baking mode.
-        self.main_node.inputs["Do Bake"].default_value = 1.0
-        self.main_node.inputs["Debug"].default_value = 0.0
-        delight_image_node.select = True
-        material.node_tree.nodes.active = delight_image_node
+    is_finished = False
+    is_cancelled = False
 
-        # Deselect everything.
-        for obj in context.scene.objects:
-            obj.select_set(False)
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT' \
+            and context.scene.compify_config.footage != None \
+            and context.scene.compify_config.camera != None \
+            and context.scene.compify_config.geo_collection != None \
+            and len(context.scene.compify_config.geo_collection.all_objects) > 0 \
+            and compify_mat_name(context) in bpy.data.materials
 
-        # Build a dictionary of the visibility of non-proxy objects so that
-        # we can restore it afterwards.
-        for obj in context.scene.objects:
-            if obj.name not in self.proxy_objects and obj.name not in proxy_lights:
-                self.hide_render_list[obj.name] = obj.hide_render
+    def render_post_callback(self, scene, context=None):
+        self.render_done = True
 
-        # Make all non-proxy objects invisible.
-        for obj_name in self.hide_render_list:
-            bpy.data.objects[obj_name].hide_render = True
+    def cancelled_callback(self, scene, context=None):
+        self.is_cancelled = True
 
-        # Set up the baking job event handlers.
-        bpy.app.handlers.object_bake_complete.append(self.post)
-        bpy.app.handlers.object_bake_cancel.append(self.cancelled)
+    def execute(self, context):
+        self.render_started = False
+        self.render_done = False
+        self.frame_range = (context.scene.frame_start, context.scene.frame_end)
+        self.stage = "bake"
+        self.baker = Baker()
 
-        # Set up the timer.
+        self.is_finished = False
+        self.is_cancelled = False
+
+        bpy.app.handlers.render_post.append(self.render_post_callback)
+        bpy.app.handlers.render_cancel.append(self.cancelled_callback)
+        bpy.app.handlers.object_bake_cancel.append(self.cancelled_callback)
+
         self._timer = context.window_manager.event_timer_add(0.05, window=context.window)
         context.window_manager.modal_handler_add(self)
 
+        context.scene.frame_set(self.frame_range[0])
+
         return {'RUNNING_MODAL'}
 
-
     def modal(self, context, event):
+        if self.is_cancelled or self.is_finished:
+            bpy.app.handlers.render_post.remove(self.render_post_callback)
+            bpy.app.handlers.render_cancel.remove(self.cancelled_callback)
+            bpy.app.handlers.object_bake_cancel.remove(self.cancelled_callback)
+
+        if self.is_cancelled:
+            return {'CANCELLED'}
+
+        if self.is_finished:
+            return {'FINISHED'}
+
         if event.type == 'TIMER':
-            if not self.is_baking and not self.is_done:
-                self.is_baking = True
-
-                # Select objects for baking.
-                for obj in self.proxy_objects:
-                    obj.select_set(True)
-                context.view_layer.objects.active = self.proxy_objects[0]
-
-                # Do the bake.
-                bpy.ops.object.bake(
-                    "INVOKE_DEFAULT",
-                    type='DIFFUSE',
-                    pass_filter={'DIRECT', 'INDIRECT', 'COLOR'},
-                    # filepath='',
-                    # width=512,
-                    # height=512,
-                    margin=context.scene.compify_config.bake_uv_margin,
-                    margin_type='EXTEND',
-                    use_selected_to_active=False,
-                    max_ray_distance=0.0,
-                    cage_extrusion=0.0,
-                    cage_object='',
-                    normal_space='TANGENT',
-                    normal_r='POS_X',
-                    normal_g='POS_Y',
-                    normal_b='POS_Z',
-                    target='IMAGE_TEXTURES',
-                    save_mode='INTERNAL',
-                    use_clear=True,
-                    use_cage=False,
-                    use_split_materials=False,
-                    use_automatic_name=False,
-                    uv_layer='',
-                )
-            elif self.is_done:
-                # Clean up the handlers and timer.
-                context.window_manager.event_timer_remove(self._timer)
-                bpy.app.handlers.object_bake_complete.remove(self.post)
-                bpy.app.handlers.object_bake_cancel.remove(self.cancelled)
-                self._timer = None
-
-                # Restore visibility of non-proxy objects.
-                for obj_name in self.hide_render_list:
-                    bpy.data.objects[obj_name].hide_render = self.hide_render_list[obj_name]
-                self.hide_render_list = {}
-
-                # Set material to non-bake mode.
-                self.main_node.inputs["Do Bake"].default_value = 0.0
-                self.main_node = None
-
-                # Reset other self properties.
-                self.is_baking = False
-                self.is_done = False
-                self.proxy_objects = []
-
-                return {'FINISHED'}
+            # Bake stage.
+            if self.stage == "bake":
+                if not self.baker.is_baking and not self.baker.is_done:
+                    self.baker.execute(context)
+                result = self.baker.modal(context, event)
+                if result == {'FINISHED'}:
+                    self.baker.reset()
+                    self.stage = "render"
+                else:
+                    if result == {'CANCELLED'}:
+                        self.is_cancelled = True
+                    return result
+            # Render stage.
+            elif self.stage == "render":
+                if not self.render_started:
+                    self.render_started = True
+                    bpy.ops.render.render("INVOKE_DEFAULT", animation=False, write_still=True)
+                elif self.render_done:
+                    if context.scene.frame_current >= self.frame_range[1]:
+                        self.is_finished = True
+                    else:
+                        context.scene.frame_set(context.scene.frame_current + 1)
+                        self.render_started = False
+                        self.render_done = False
+                        self.stage = "bake"
 
         return {'PASS_THROUGH'}
 
@@ -607,6 +561,7 @@ def register():
     bpy.utils.register_class(CompifyAddFootageLightsCollection)
     bpy.utils.register_class(CompifyPrepScene)
     bpy.utils.register_class(CompifyBake)
+    bpy.utils.register_class(CompifyRender)
     bpy.utils.register_class(CompifyCameraProjectGroupNew)
     bpy.utils.register_class(CompifyFootageConfig)
 
@@ -623,6 +578,7 @@ def unregister():
     bpy.utils.unregister_class(CompifyAddFootageLightsCollection)
     bpy.utils.unregister_class(CompifyPrepScene)
     bpy.utils.unregister_class(CompifyBake)
+    bpy.utils.unregister_class(CompifyRender)
     bpy.utils.unregister_class(CompifyCameraProjectGroupNew)
     bpy.utils.unregister_class(CompifyFootageConfig)
 
