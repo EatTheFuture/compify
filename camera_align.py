@@ -42,14 +42,14 @@ class CompifyCameraAlignPanel(bpy.types.Panel):
             col.prop(point, "name")
 
             row = col.row()
-            row.prop(point, "scene_point", text="Target Point")
-            row.operator("scene.compify_align_set_scene_point_to_cursor", text="", icon="CURSOR")
+            row.prop(point, "track_point", text="From")
+            row.operator("scene.compify_align_set_track_point_to_cursor", text="", icon="CURSOR")
 
             col.separator(factor=2.0)
 
             row = col.row()
-            row.prop(point, "track_point", text="Tracker")
-            row.operator("scene.compify_align_set_track_point_to_cursor", text="", icon="CURSOR")
+            row.prop(point, "scene_point", text="To")
+            row.operator("scene.compify_align_set_scene_point_to_cursor", text="", icon="CURSOR")
 
         col = layout.column()
         col.separator(factor=2.0)
@@ -63,9 +63,6 @@ class OBJECT_UL_compify_camera_align_items(bpy.types.UIList):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             row = layout.row()
             row.label(text=item.name)
-            row.label(text="{:.2f}".format(item.scene_point[0]))
-            row.label(text="{:.2f}".format(item.scene_point[1]))
-            row.label(text="{:.2f}".format(item.scene_point[2]))
         # 'GRID' layout type should be as compact as possible (typically a single icon!).
         elif self.layout_type in {'GRID'}:
             layout.alignment = 'CENTER'
