@@ -72,6 +72,7 @@ class CompifyPanel(bpy.types.Panel):
         box.template_ID(context.scene.compify_config, "footage", open="image.open")
         box.use_property_split = True
         if context.scene.compify_config.footage != None:
+            box.prop(context.scene.compify_config.footage, "source")
             box.prop(context.scene.compify_config.footage.colorspace_settings, "name", text="  Color Space")
         box.prop(context.scene.compify_config, "camera", text="  Camera")
 
@@ -255,7 +256,7 @@ def change_footage_camera(config, context):
 
 
 class CompifyPrepScene(bpy.types.Operator):
-    """Prepares the scene for compification."""
+    """Prepares the scene for compification"""
     bl_idname = "material.compify_prep_scene"
     bl_label = "Prep Scene"
     bl_options = {'UNDO'}
@@ -326,7 +327,7 @@ class CompifyPrepScene(bpy.types.Operator):
 
 
 class CompifyBake(bpy.types.Operator):
-    """Does the Compify lighting baking for proxy geometry."""
+    """Does the Compify lighting baking for proxy geometry"""
     bl_idname = "material.compify_bake"
     bl_label = "Bake Footage Lighting"
     bl_options = {'UNDO'}
@@ -367,9 +368,9 @@ class CompifyBake(bpy.types.Operator):
 
 
 class CompifyRender(bpy.types.Operator):
-    """Render, but with Compify baking before rendering each frame."""
+    """Render, but with Compify baking before rendering each frame"""
     bl_idname = "render.compify_render"
-    bl_label = "Render with Compify Lighting Integration"
+    bl_label = "Render Animation with Compify Integration"
 
     _timer = None
     render_started = False
@@ -466,7 +467,7 @@ class CompifyRender(bpy.types.Operator):
 
 
 class CompifyAddFootageGeoCollection(bpy.types.Operator):
-    """Creates and assigns a new empty collection for footage geometry."""
+    """Creates and assigns a new empty collection for footage geometry"""
     bl_idname = "scene.compify_add_footage_geo_collection"
     bl_label = "Add Footage Geo Collection"
     bl_options = {'UNDO'}
@@ -483,7 +484,7 @@ class CompifyAddFootageGeoCollection(bpy.types.Operator):
 
 
 class CompifyAddFootageLightsCollection(bpy.types.Operator):
-    """Creates and assigns a new empty collection for footage lights."""
+    """Creates and assigns a new empty collection for footage lights"""
     bl_idname = "scene.compify_add_footage_lights_collection"
     bl_label = "Add Footage Lights Collection"
     bl_options = {'UNDO'}
