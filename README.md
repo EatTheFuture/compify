@@ -2,7 +2,9 @@
 
 A Blender addon for easier/better compositing in 3D space.
 
-This addon requires Blender 3.0 or later.
+This addon is currently beta quality.  There may still be major bugs and rough edges, but in general it should *basically* work.  Due to limitations in Blender's Python APIs there are also some rough edges that are unforunately impossible to fix at the moment.
+
+This addon requires Blender 3.4 or later.
 
 
 # License

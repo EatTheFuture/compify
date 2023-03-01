@@ -20,7 +20,7 @@ bl_info = {
     "name": "Compify",
     "version": (0, 1, 0),
     "author": "Nathan Vegdahl, Ian Hubert",
-    "blender": (3, 3, 0),
+    "blender": (3, 4, 0),
     "description": "Do compositing in 3D space.",
     "location": "Scene properties",
     # "doc_url": "",
