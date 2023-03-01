@@ -511,7 +511,12 @@ class CompifyCameraProjectGroupNew(bpy.types.Operator):
         return context.active_object != None and context.active_object.type == 'CAMERA'
 
     def execute(self, context):
-        ensure_camera_project_group(context.active_object)
+        x_res = context.scene.render.resolution_x
+        y_res = context.scene.render.resolution_y
+        x_asp = context.scene.render.pixel_aspect_x
+        y_asp = context.scene.render.pixel_aspect_y
+
+        ensure_camera_project_group(context.active_object, (x_res * x_asp) / (y_res * y_asp))
         return {'FINISHED'}
 
 

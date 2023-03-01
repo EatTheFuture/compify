@@ -613,7 +613,7 @@ def ensure_feathered_square_group():
 # projecting textures from that camera.
 #
 # It will create it if it doesn't exist, and returns the group.
-def ensure_camera_project_group(camera):
+def ensure_camera_project_group(camera, default_aspect=1.0):
     name = "Camera Project | " + camera.name
 
     # Fetch or create group.
@@ -630,7 +630,7 @@ def ensure_camera_project_group(camera):
     # Create the group inputs and outputs.
     if not "Aspect Ratio" in group.inputs:
         group.inputs.new(type="NodeSocketFloat", name="Aspect Ratio")
-        group.inputs['Aspect Ratio'].default_value = 1.0
+        group.inputs['Aspect Ratio'].default_value = default_aspect
     if not "Rotation" in group.inputs:
         group.inputs.new(type="NodeSocketFloat", name="Rotation")
     if not "Loc X" in group.inputs:
@@ -666,7 +666,11 @@ def ensure_camera_project_group(camera):
 
     user_translate = group.nodes.new(type='ShaderNodeVectorMath')
     user_rotate = group.nodes.new(type='ShaderNodeVectorRotate')
-    aspect_ratio = group.nodes.new(type='ShaderNodeCombineXYZ')
+    aspect_ratio_1 = group.nodes.new(type='ShaderNodeCombineXYZ')
+    aspect_ratio_2 = group.nodes.new(type='ShaderNodeCombineXYZ')
+    aspect_ratio_div = group.nodes.new(type='ShaderNodeMath')
+    aspect_ratio_lt = group.nodes.new(type='ShaderNodeMath')
+    aspect_ratio_switch = group.nodes.new(type='ShaderNodeMixRGB')
     user_transforms = group.nodes.new(type='ShaderNodeVectorMath')
 
     recenter = group.nodes.new(type='ShaderNodeVectorMath')
@@ -694,7 +698,13 @@ def ensure_camera_project_group(camera):
 
     user_translate.label = "User Translate"
     user_rotate.label = "User Rotate"
-    aspect_ratio.label = "Aspect Ratio"
+
+    aspect_ratio_1.label = "Aspect Ratio 1"
+    aspect_ratio_2.label = "Aspect Ratio 2"
+    aspect_ratio_div.label = "Divide"
+    aspect_ratio_lt.label = "Less Than"
+    aspect_ratio_switch.label = "Aspect Ratio Switch"
+
     user_transforms.label = "User Transforms"
 
     recenter.label = "Recenter"
@@ -735,13 +745,17 @@ def ensure_camera_project_group(camera):
 
     x += hs
     lens_shift_2.location = (x, 0.0)
+    aspect_ratio_div.location = (x, -850.0)
 
     x += hs
     user_translate.location = (x, 0.0)
+    aspect_ratio_lt.location = (x, -500.0)
+    aspect_ratio_1.location = (x, -700.0)
+    aspect_ratio_2.location = (x, -850.0)
 
     x += hs
     user_rotate.location = (x, 0.0)
-    aspect_ratio.location = (x, -300.0)
+    aspect_ratio_switch.location = (x, -600.0)
 
     x += hs
     user_transforms.location = (x, 0.0)
@@ -813,8 +827,17 @@ def ensure_camera_project_group(camera):
     user_rotate.rotation_type = 'Z_AXIS'
     user_rotate.invert = False
     user_rotate.inputs['Center'].default_value = (0.0, 0.0, 0.0)
-    aspect_ratio.inputs['X'].default_value = 1.0
-    aspect_ratio.inputs['Z'].default_value = 0.0
+    aspect_ratio_1.inputs['X'].default_value = 1.0
+    aspect_ratio_1.inputs['Z'].default_value = 0.0
+    aspect_ratio_2.inputs['Y'].default_value = 1.0
+    aspect_ratio_2.inputs['Z'].default_value = 0.0
+    aspect_ratio_div.operation = 'DIVIDE'
+    aspect_ratio_div.inputs[0].default_value = 1.0
+    aspect_ratio_lt.operation = 'LESS_THAN'
+    aspect_ratio_lt.inputs[1].default_value = 1.0
+    aspect_ratio_switch.blend_type = 'MIX'
+    aspect_ratio_switch.use_clamp = False
+
     user_transforms.operation = 'MULTIPLY'
 
     recenter.operation = 'ADD'
@@ -831,7 +854,9 @@ def ensure_camera_project_group(camera):
     group.links.new(lens_shift_y.outputs['Value'], lens_shift_1.inputs['Y'])
     group.links.new(lens_shift_1.outputs['Vector'], lens_shift_2.inputs[1])
 
-    group.links.new(input.outputs['Aspect Ratio'], aspect_ratio.inputs[1])
+    group.links.new(input.outputs['Aspect Ratio'], aspect_ratio_1.inputs['Y'])
+    group.links.new(input.outputs['Aspect Ratio'], aspect_ratio_div.inputs[1])
+    group.links.new(input.outputs['Aspect Ratio'], aspect_ratio_lt.inputs[0])
     group.links.new(input.outputs['Rotation'], to_radians.inputs[0])
     group.links.new(to_radians.outputs['Value'], user_rotate.inputs['Angle'])
     group.links.new(input.outputs['Loc X'], user_location.inputs['X'])
@@ -849,9 +874,14 @@ def ensure_camera_project_group(camera):
     group.links.new(zoom_3.outputs['Vector'], lens_shift_2.inputs[0])
     group.links.new(lens_shift_2.outputs['Vector'], user_translate.inputs[0])
 
+    group.links.new(aspect_ratio_div.outputs[0], aspect_ratio_2.inputs['X'])
+    group.links.new(aspect_ratio_1.outputs[0], aspect_ratio_switch.inputs[1])
+    group.links.new(aspect_ratio_2.outputs[0], aspect_ratio_switch.inputs[2])
+    group.links.new(aspect_ratio_lt.outputs[0], aspect_ratio_switch.inputs[0])
+
     group.links.new(user_translate.outputs['Vector'], user_rotate.inputs['Vector'])
     group.links.new(user_rotate.outputs['Vector'], user_transforms.inputs[0])
-    group.links.new(aspect_ratio.outputs['Vector'], user_transforms.inputs[1])
+    group.links.new(aspect_ratio_switch.outputs[0], user_transforms.inputs[1])
     group.links.new(user_transforms.outputs['Vector'], recenter.inputs[0])
 
     group.links.new(recenter.outputs['Vector'], output.inputs['Vector'])
