@@ -20,7 +20,7 @@ bl_info = {
     "name": "Compify",
     "version": (0, 1, 0),
     "author": "Nathan Vegdahl, Ian Hubert",
-    "blender": (3, 4, 0),
+    "blender": (4, 0, 0),
     "description": "Do compositing in 3D space.",
     "location": "Scene properties",
     # "doc_url": "",
@@ -207,7 +207,13 @@ def create_compify_material(name, camera, footage):
 
     # Configure the nodes.
     camera_project.node_tree = ensure_camera_project_group(camera)
-    camera_project.inputs['Aspect Ratio'].default_value = footage.size[0] / footage.size[1]
+    if footage.size[0] > 0 and footage.size[1] > 0:
+        camera_project.inputs['Aspect Ratio'].default_value = footage.size[0] / footage.size[1]
+    else:
+        # Default to the output render aspect ratio if we're on a bogus footage frame.
+        render_x = bpy.context.scene.render.resolution_x * bpy.context.scene.render.pixel_aspect_x
+        render_y = bpy.context.scene.render.resolution_y * bpy.context.scene.render.pixel_aspect_y
+        camera_project.inputs['Aspect Ratio'].default_value = render_x / render_y
 
     baking_uv_map.uv_map = UV_LAYER_NAME
 
