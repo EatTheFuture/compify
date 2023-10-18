@@ -1,6 +1,12 @@
 import bpy
 import math
 
+def hide_sockets(node):
+    for input in node.inputs:
+        input.hide = True
+    for output in node.outputs:
+        output.hide = True
+
 # Ensures that the Compify Footage shader group exists.
 #
 # It will create it if it doesn't exist, and returns the group.
@@ -348,30 +354,54 @@ def ensure_footage_group():
     # Create the nodes.
     mix_input = group.nodes.new(type='NodeGroupInput')
     background_mask = group.nodes.new(type='ShaderNodeMixShader')
+    backfacing1_mask = group.nodes.new(type='ShaderNodeMixShader')
+    backfacing1_geo = group.nodes.new(type='ShaderNodeNewGeometry')
+    hide_sockets(backfacing1_geo)
+    backfacing1_shader = group.nodes.new(type='ShaderNodeBsdfTransparent')
     camera_switch = group.nodes.new(type='ShaderNodeMixShader')
     bake_switch = group.nodes.new(type='ShaderNodeMixShader')
+    backfacing2_mask = group.nodes.new(type='ShaderNodeMixShader')
+    backfacing2_geo = group.nodes.new(type='ShaderNodeNewGeometry')
+    hide_sockets(backfacing2_geo)
+    backfacing2_shader = group.nodes.new(type='ShaderNodeBsdfTransparent')
     output = group.nodes.new(type='NodeGroupOutput')
 
     # Label the nodes.
     mix_input.label = "Mix Input"
     background_mask.label = "Background Mask"
+    backfacing1_mask.label = "Backfacing Mask"
+    backfacing2_mask.label = "Backfacing Mask"
     camera_switch.label = "Camera Switch"
     bake_switch.label = "Bake Switch"
 
     # Position the nodes.
     hs = 200.0
-    x = 1400.0
+    x = 1200.0
     y = 300.0
 
     mix_input.location = (x, y)
 
     x += hs
-    background_mask.location = (x, y - 100.0)
+    background_mask.location = (x, y - 200.0)
+    backfacing1_geo.location = (x, y - 450)
+    backfacing1_shader.location = (x, y - 550)
 
     x += hs
-    camera_switch.location = (x, y - 100.0)
+    backfacing1_mask.location = (x, y - 450)
 
     x += hs
+    camera_switch.location = (x, y - 200.0)
+
+    x += 50.0
+    y = 600.0
+    backfacing2_geo.location = (x, y)
+    backfacing2_shader.location = (x, y - 100)
+
+    x += hs
+    backfacing2_mask.location = (x, y)
+
+    x += hs
+    y = 300.0
     bake_switch.location = (x, y)
 
     x += hs
@@ -386,9 +416,14 @@ def ensure_footage_group():
     # Hook up the nodes.
     group.links.new(mix_input.outputs['Footage Alpha'], background_mask.inputs['Fac'])
     group.links.new(mix_input.outputs['Do Bake'], bake_switch.inputs['Fac'])
-    group.links.new(background_mask.outputs['Shader'], camera_switch.inputs[1])
+    group.links.new(backfacing1_geo.outputs['Backfacing'], backfacing1_mask.inputs['Fac'])
+    group.links.new(background_mask.outputs['Shader'], backfacing1_mask.inputs[1])
+    group.links.new(backfacing1_shader.outputs[0], backfacing1_mask.inputs[2])
+    group.links.new(backfacing1_mask.outputs['Shader'], camera_switch.inputs[1])
     group.links.new(camera_switch.outputs['Shader'], bake_switch.inputs[1])
     group.links.new(bake_switch.outputs['Shader'], output.inputs['Shader'])
+    group.links.new(backfacing2_geo.outputs['Backfacing'], backfacing2_mask.inputs['Fac'])
+    group.links.new(backfacing2_shader.outputs[0], backfacing2_mask.inputs[2])
 
     #-------------------------------------------------
     # Final hook up of all the groups of nodes above.
@@ -398,7 +433,8 @@ def ensure_footage_group():
     group.links.new(background_3.outputs['Shader'], background_mask.inputs[1])
     group.links.new(footage_2.outputs['Shader'], background_mask.inputs[2])
     group.links.new(footage_2.outputs['Shader'], camera_switch.inputs[2])
-    group.links.new(baking_3.outputs['Shader'], bake_switch.inputs[2])
+    group.links.new(baking_3.outputs['Shader'], backfacing2_mask.inputs[1])
+    group.links.new(backfacing2_mask.outputs['Shader'], bake_switch.inputs[2])
 
     return group
 
