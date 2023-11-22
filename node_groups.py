@@ -21,49 +21,49 @@ def ensure_footage_group():
         group.nodes.remove(node)
 
     # Create the group inputs and outputs.
-    socket = group.interface.new_socket(name="Footage", socket_type="NodeSocketColor", in_out='INPUT')
+    socket = group.interface.new_socket(name="Footage", socket_type='NodeSocketColor', in_out='INPUT')
     socket.default_value = (1.0, 0.0, 1.0, 1.0)
     socket.hide_value = True
 
-    socket = group.interface.new_socket(name="Footage Alpha", socket_type="NodeSocketFloat", in_out='INPUT')
+    socket = group.interface.new_socket(name="Footage Alpha", socket_type='NodeSocketFloat', in_out='INPUT')
     socket.default_value = 1.0
     socket.min_value = 0.0
     socket.max_value = 1.0
 
-    socket = group.interface.new_socket(name="Footage Emit", socket_type="NodeSocketFloat", in_out='INPUT')
+    socket = group.interface.new_socket(name="Footage Emit", socket_type='NodeSocketFloat', in_out='INPUT')
     socket.default_value = 0.0
     socket.min_value = 0.0
     socket.max_value = 1.0
 
-    socket = group.interface.new_socket(name="Background", socket_type="NodeSocketColor", in_out='INPUT')
+    socket = group.interface.new_socket(name="Background", socket_type='NodeSocketColor', in_out='INPUT')
     socket.default_value = (1.0, 0.0, 1.0, 1.0)
     socket.hide_value = True
 
-    socket = group.interface.new_socket(name="Background Alpha", socket_type="NodeSocketFloat", in_out='INPUT')
+    socket = group.interface.new_socket(name="Background Alpha", socket_type='NodeSocketFloat', in_out='INPUT')
     socket.default_value = 0.0
     socket.min_value = 0.0
     socket.max_value = 1.0
 
-    socket = group.interface.new_socket(name="Background Emit", socket_type="NodeSocketFloat", in_out='INPUT')
+    socket = group.interface.new_socket(name="Background Emit", socket_type='NodeSocketFloat', in_out='INPUT')
     socket.default_value = 0.0
     socket.min_value = 0.0
     socket.max_value = 1.0
 
-    socket = group.interface.new_socket(name="Baked Lighting", socket_type="NodeSocketColor", in_out='INPUT')
+    socket = group.interface.new_socket(name="Baked Lighting", socket_type='NodeSocketColor', in_out='INPUT')
     socket.default_value = (1.0, 1.0, 1.0, 1.0)
     socket.hide_value = True
 
-    socket = group.interface.new_socket(name="Do Bake", socket_type="NodeSocketFloat", in_out='INPUT')
+    socket = group.interface.new_socket(name="Do Bake", socket_type='NodeSocketFloat', in_out='INPUT')
     socket.default_value = 0.0
     socket.min_value = 0.0
     socket.max_value = 1.0
 
-    socket = group.interface.new_socket(name="Debug", socket_type="NodeSocketFloat", in_out='INPUT')
+    socket = group.interface.new_socket(name="Debug", socket_type='NodeSocketFloat', in_out='INPUT')
     socket.default_value = 0.0
     socket.min_value = 0.0
     socket.max_value = 1.0
 
-    group.interface.new_socket(name="Shader", socket_type="NodeSocketShader", in_out='OUTPUT')
+    group.interface.new_socket(name="Shader", socket_type='NodeSocketShader', in_out='OUTPUT')
 
     #-------------------
     # Footage nodes.
@@ -455,19 +455,19 @@ def ensure_feathered_square_group():
         group.nodes.remove(node)
     
     # Create the group inputs and outputs.
-    group.interface.new_socket(name="Vector", socket_type="NodeSocketVector", in_out='INPUT')
+    group.interface.new_socket(name="Vector", socket_type='NodeSocketVector', in_out='INPUT')
     
-    socket = group.interface.new_socket(name="Feather", socket_type="NodeSocketFloat", in_out='INPUT')
+    socket = group.interface.new_socket(name="Feather", socket_type='NodeSocketFloat', in_out='INPUT')
     socket.default_value = 0.0
     socket.min_value = 0.0
     socket.max_value = 1.0
     
-    socket = group.interface.new_socket(name="Dilate", socket_type="NodeSocketFloat", in_out='INPUT')
+    socket = group.interface.new_socket(name="Dilate", socket_type='NodeSocketFloat', in_out='INPUT')
     socket.default_value = 0.0
     socket.min_value = 0.0
     socket.max_value = 0.1
     
-    group.interface.new_socket(name="Value", socket_type="NodeSocketFloat", in_out='OUTPUT')
+    group.interface.new_socket(name="Value", socket_type='NodeSocketFloat', in_out='OUTPUT')
 
     #-------------------
     # Create the nodes.
@@ -676,7 +676,7 @@ def ensure_camera_project_group(camera, default_aspect=1.0):
 
     # Create the group outputs.
     if not "Vector" in group.interface.items_tree:
-        group.interface.new_socket(name="Vector", socket_type = 'NodeSocketVector', in_out='OUTPUT')
+        group.interface.new_socket(name="Vector", socket_type='NodeSocketVector', in_out='OUTPUT')
 
     #-------------------
     # Create the nodes.
