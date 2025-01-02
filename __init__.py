@@ -161,7 +161,6 @@ def create_compify_material(name, camera, footage):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     mat.blend_method = 'HASHED'
-    mat.shadow_method = 'HASHED'
     for node in mat.node_tree.nodes:
         mat.node_tree.nodes.remove(node)
 
