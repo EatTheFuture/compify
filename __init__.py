@@ -18,9 +18,9 @@
 
 bl_info = {
     "name": "Compify",
-    "version": (0, 1, 0),
-    "author": "Nathan Vegdahl, Ian Hubert",
-    "blender": (4, 0, 0),
+    "version": (0, 2, 0),
+    "author": "Nathan Vegdahl, Ian Hubert, Cyrus James Khan",
+    "blender": (4, 5, 0),
     "description": "Do compositing in 3D space.",
     "location": "Scene properties",
     # "doc_url": "",
@@ -161,83 +161,103 @@ def create_compify_material(name, camera, footage):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     mat.blend_method = 'HASHED'
-    mat.shadow_method = 'HASHED'
     for node in mat.node_tree.nodes:
         mat.node_tree.nodes.remove(node)
 
-    # Create the nodes.
-    output = mat.node_tree.nodes.new(type='ShaderNodeOutputMaterial')
-    camera_project = mat.node_tree.nodes.new(type='ShaderNodeGroup')
-    baking_uv_map = mat.node_tree.nodes.new(type='ShaderNodeUVMap')
-    input_footage = mat.node_tree.nodes.new(type='ShaderNodeTexImage')
-    feathered_square = mat.node_tree.nodes.new(type='ShaderNodeGroup')
-    baked_lighting = mat.node_tree.nodes.new(type='ShaderNodeTexImage')
-    compify_footage = mat.node_tree.nodes.new(type='ShaderNodeGroup')
+    try:
+        # Create the nodes.
+        output = mat.node_tree.nodes.new(type='ShaderNodeOutputMaterial')
+        camera_project = mat.node_tree.nodes.new(type='ShaderNodeGroup')
+        baking_uv_map = mat.node_tree.nodes.new(type='ShaderNodeUVMap')
+        input_footage = mat.node_tree.nodes.new(type='ShaderNodeTexImage')
+        feathered_square = mat.node_tree.nodes.new(type='ShaderNodeGroup')
+        baked_lighting = mat.node_tree.nodes.new(type='ShaderNodeTexImage')
+        compify_footage = mat.node_tree.nodes.new(type='ShaderNodeGroup')
 
-    # Label and name the nodes.
-    camera_project.label = "Camera Project"
-    baking_uv_map.label = "Baking UV Map"
-    input_footage.label = "Input Footage"
-    feathered_square.label = "Feathered Square"
-    baked_lighting.label = BAKE_IMAGE_NODE_NAME
-    compify_footage.label = MAIN_NODE_NAME
+        # Label and name the nodes.
+        camera_project.label = "Camera Project"
+        baking_uv_map.label = "Baking UV Map"
+        input_footage.label = "Input Footage"
+        feathered_square.label = "Feathered Square"
+        baked_lighting.label = BAKE_IMAGE_NODE_NAME
+        compify_footage.label = MAIN_NODE_NAME
 
-    camera_project.name = "Camera Project"
-    baking_uv_map.label = "Baking UV Map"
-    input_footage.name = "Input Footage"
-    feathered_square.name = "Feathered Square"
-    baked_lighting.name = BAKE_IMAGE_NODE_NAME
-    compify_footage.name = MAIN_NODE_NAME
+        camera_project.name = "Camera Project"
+        baking_uv_map.label = "Baking UV Map"
+        input_footage.name = "Input Footage"
+        feathered_square.name = "Feathered Square"
+        baked_lighting.name = BAKE_IMAGE_NODE_NAME
+        compify_footage.name = MAIN_NODE_NAME
 
-    # Position the nodes.
-    hs = 400.0
-    x = 0.0
+        # Position the nodes.
+        hs = 400.0
+        x = 0.0
 
-    camera_project.location = (x, 0.0)
-    baking_uv_map.location = (x, -200.0)
-    x += hs
-    input_footage.location = (x, 400.0)
-    feathered_square.location = (x, 0.0)
-    baked_lighting.location = (x, -200.0)
-    x += hs
-    compify_footage.location = (x, 0.0)
-    compify_footage.width = 200.0
-    x += hs
-    output.location = (x, 0.0)
+        camera_project.location = (x, 0.0)
+        baking_uv_map.location = (x, -200.0)
+        x += hs
+        input_footage.location = (x, 400.0)
+        feathered_square.location = (x, 0.0)
+        baked_lighting.location = (x, -200.0)
+        x += hs
+        compify_footage.location = (x, 0.0)
+        compify_footage.width = 200.0
+        x += hs
+        output.location = (x, 0.0)
 
-    # Configure the nodes.
-    camera_project.node_tree = ensure_camera_project_group(camera)
-    if footage.size[0] > 0 and footage.size[1] > 0:
-        camera_project.inputs['Aspect Ratio'].default_value = footage.size[0] / footage.size[1]
-    else:
-        # Default to the output render aspect ratio if we're on a bogus footage frame.
-        render_x = bpy.context.scene.render.resolution_x * bpy.context.scene.render.pixel_aspect_x
-        render_y = bpy.context.scene.render.resolution_y * bpy.context.scene.render.pixel_aspect_y
-        camera_project.inputs['Aspect Ratio'].default_value = render_x / render_y
+        # Configure the nodes.
+        camera_project_group = ensure_camera_project_group(camera)
+        if camera_project_group is None:
+            print(f"Compify Error: Failed to create camera project group for camera '{camera.name}'")
+            return mat
+        camera_project.node_tree = camera_project_group
+        
+        if footage.size[0] > 0 and footage.size[1] > 0:
+            camera_project.inputs['Aspect Ratio'].default_value = footage.size[0] / footage.size[1]
+        else:
+            # Default to the output render aspect ratio if we're on a bogus footage frame.
+            render_x = bpy.context.scene.render.resolution_x * bpy.context.scene.render.pixel_aspect_x
+            render_y = bpy.context.scene.render.resolution_y * bpy.context.scene.render.pixel_aspect_y
+            camera_project.inputs['Aspect Ratio'].default_value = render_x / render_y
 
-    baking_uv_map.uv_map = UV_LAYER_NAME
+        baking_uv_map.uv_map = UV_LAYER_NAME
 
-    input_footage.image = footage
-    input_footage.interpolation = 'Closest'
-    input_footage.projection = 'FLAT'
-    input_footage.extension = 'EXTEND'
-    input_footage.image_user.frame_duration = footage.frame_duration
-    input_footage.image_user.use_auto_refresh = True
+        input_footage.image = footage
+        input_footage.interpolation = 'Closest'
+        input_footage.projection = 'FLAT'
+        input_footage.extension = 'EXTEND'
+        input_footage.image_user.frame_duration = footage.frame_duration
+        input_footage.image_user.use_auto_refresh = True
 
-    feathered_square.node_tree = ensure_feathered_square_group()
-    feathered_square.inputs['Feather'].default_value = 0.05
-    feathered_square.inputs['Dilate'].default_value = 0.0
+        feathered_square_group = ensure_feathered_square_group()
+        if feathered_square_group is None:
+            print(f"Compify Error: Failed to create feathered square group")
+            return mat
+        feathered_square.node_tree = feathered_square_group
+        feathered_square.inputs['Feather'].default_value = 0.05
+        feathered_square.inputs['Dilate'].default_value = 0.0
 
-    compify_footage.node_tree = ensure_footage_group()
+        compify_footage_group = ensure_footage_group()
+        if compify_footage_group is None:
+            print(f"Compify Error: Failed to create footage group")
+            return mat
+        compify_footage.node_tree = compify_footage_group
 
-    # Hook up the nodes.
-    mat.node_tree.links.new(camera_project.outputs['Vector'], input_footage.inputs['Vector'])
-    mat.node_tree.links.new(camera_project.outputs['Vector'], feathered_square.inputs['Vector'])
-    mat.node_tree.links.new(baking_uv_map.outputs['UV'], baked_lighting.inputs['Vector'])
-    mat.node_tree.links.new(input_footage.outputs['Color'], compify_footage.inputs['Footage'])
-    mat.node_tree.links.new(feathered_square.outputs['Value'], compify_footage.inputs['Footage Alpha'])
-    mat.node_tree.links.new(baked_lighting.outputs['Color'], compify_footage.inputs['Baked Lighting'])
-    mat.node_tree.links.new(compify_footage.outputs['Shader'], output.inputs['Surface'])
+        # Hook up the nodes.
+        mat.node_tree.links.new(camera_project.outputs['Vector'], input_footage.inputs['Vector'])
+        mat.node_tree.links.new(camera_project.outputs['Vector'], feathered_square.inputs['Vector'])
+        mat.node_tree.links.new(baking_uv_map.outputs['UV'], baked_lighting.inputs['Vector'])
+        mat.node_tree.links.new(input_footage.outputs['Color'], compify_footage.inputs['Footage'])
+        mat.node_tree.links.new(feathered_square.outputs['Value'], compify_footage.inputs['Footage Alpha'])
+        mat.node_tree.links.new(baked_lighting.outputs['Color'], compify_footage.inputs['Baked Lighting'])
+        mat.node_tree.links.new(compify_footage.outputs['Shader'], output.inputs['Surface'])
+
+        print(f"Compify: Successfully created material '{name}' with all node groups")
+        
+    except Exception as e:
+        print(f"Compify Error: Failed to create material '{name}'. Error: {e}")
+        import traceback
+        traceback.print_exc()
 
     return mat
 
@@ -347,12 +367,28 @@ class CompifyBake(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.mode == 'OBJECT' \
+        if not (context.mode == 'OBJECT' \
             and context.scene.compify_config.footage != None \
             and context.scene.compify_config.camera != None \
             and context.scene.compify_config.geo_collection != None \
-            and len(context.scene.compify_config.geo_collection.all_objects) > 0 \
-            and compify_mat_name(context) in bpy.data.materials
+            and len(context.scene.compify_config.geo_collection.all_objects) > 0):
+            return False
+        
+        mat_name = compify_mat_name(context)
+        if mat_name not in bpy.data.materials:
+            return False
+        
+        # Check if the main node exists in the material
+        mat = bpy.data.materials[mat_name]
+        if MAIN_NODE_NAME not in mat.node_tree.nodes:
+            return False
+        
+        # Check if the main node has a valid node group assigned
+        main_node = mat.node_tree.nodes[MAIN_NODE_NAME]
+        if main_node.node_tree is None:
+            return False
+        
+        return True
 
     def post(self, scene, context=None):
         self.baker.post(scene, context)
