@@ -20,7 +20,7 @@ bl_info = {
     "name": "Compify",
     "version": (0, 1, 0),
     "author": "Nathan Vegdahl, Ian Hubert",
-    "blender": (4, 0, 0),
+    "blender": (5, 1, 0),
     "description": "Do compositing in 3D space.",
     "location": "Scene properties",
     # "doc_url": "",
@@ -160,8 +160,7 @@ def create_compify_material(name, camera, footage):
     # Create a new completely empty node-based material.
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
-    mat.blend_method = 'HASHED'
-    mat.shadow_method = 'HASHED'
+    mat.surface_render_method = 'DITHERED'
     for node in mat.node_tree.nodes:
         mat.node_tree.nodes.remove(node)
 

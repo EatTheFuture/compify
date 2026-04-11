@@ -72,7 +72,7 @@ def ensure_footage_group():
     footage_frame = group.nodes.new(type='NodeFrame')
     footage_input = group.nodes.new(type='NodeGroupInput')
     footage_debug = group.nodes.new(type='ShaderNodeMath')
-    footage_delight = group.nodes.new(type='ShaderNodeMixRGB')
+    footage_delight = group.nodes.new(type='ShaderNodeMix')
     footage_1 = group.nodes.new(type='ShaderNodeBsdfDiffuse')
     footage_2 = group.nodes.new(type='ShaderNodeMixShader')
 
@@ -113,9 +113,10 @@ def ensure_footage_group():
     footage_input.outputs["Baked Lighting"].hide = False
     footage_input.outputs["Do Bake"].hide = False
 
+    footage_delight.data_type = 'RGBA'
     footage_delight.blend_type = 'DIVIDE'
-    footage_delight.use_clamp = False
-    footage_delight.inputs[0].default_value = 1.0
+    footage_delight.clamp_result = False
+    footage_delight.inputs['Factor'].default_value = 1.0
 
     footage_1.inputs['Roughness'].default_value = 0.0
     footage_1.hide = True
@@ -125,12 +126,12 @@ def ensure_footage_group():
     footage_debug.hide = True
 
     # Hook up the nodes.
-    group.links.new(footage_input.outputs['Footage'], footage_delight.inputs['Color1'])
+    group.links.new(footage_input.outputs['Footage'], footage_delight.inputs['A'])
     group.links.new(footage_input.outputs['Footage'], footage_2.inputs[2])
     group.links.new(footage_input.outputs['Footage Emit'], footage_debug.inputs[0])
-    group.links.new(footage_input.outputs['Baked Lighting'], footage_delight.inputs['Color2'])
+    group.links.new(footage_input.outputs['Baked Lighting'], footage_delight.inputs['B'])
     group.links.new(footage_input.outputs['Do Bake'], footage_debug.inputs[1])
-    group.links.new(footage_delight.outputs['Color'], footage_1.inputs['Color'])
+    group.links.new(footage_delight.outputs['Result'], footage_1.inputs['Color'])
     group.links.new(footage_1.outputs['BSDF'], footage_2.inputs[1])
     group.links.new(footage_debug.outputs['Value'], footage_2.inputs['Fac'])
 
@@ -141,7 +142,7 @@ def ensure_footage_group():
     background_frame = group.nodes.new(type='NodeFrame')
     background_input = group.nodes.new(type='NodeGroupInput')
     background_debug = group.nodes.new(type='ShaderNodeMath')
-    background_delight = group.nodes.new(type='ShaderNodeMixRGB')
+    background_delight = group.nodes.new(type='ShaderNodeMix')
     background_transparent = group.nodes.new(type='ShaderNodeBsdfTransparent')
     background_1 = group.nodes.new(type='ShaderNodeBsdfDiffuse')
     background_2 = group.nodes.new(type='ShaderNodeMixShader')
@@ -192,9 +193,10 @@ def ensure_footage_group():
     background_input.outputs["Baked Lighting"].hide = False
     background_input.outputs["Do Bake"].hide = False
 
+    background_delight.data_type = 'RGBA'
     background_delight.blend_type = 'DIVIDE'
-    background_delight.use_clamp = False
-    background_delight.inputs[0].default_value = 1.0
+    background_delight.clamp_result = False
+    background_delight.inputs['Factor'].default_value = 1.0
 
     background_transparent.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
 
@@ -206,13 +208,13 @@ def ensure_footage_group():
     background_debug.hide = True
 
     # Hook up the nodes.
-    group.links.new(background_input.outputs['Background'], background_delight.inputs['Color1'])
+    group.links.new(background_input.outputs['Background'], background_delight.inputs['A'])
     group.links.new(background_input.outputs['Background'], background_2.inputs[2])
     group.links.new(background_input.outputs['Background Alpha'], background_3.inputs['Fac'])
     group.links.new(background_input.outputs['Background Emit'], background_debug.inputs[0])
-    group.links.new(background_input.outputs['Baked Lighting'], background_delight.inputs['Color2'])
+    group.links.new(background_input.outputs['Baked Lighting'], background_delight.inputs['B'])
     group.links.new(background_input.outputs['Do Bake'], background_debug.inputs[1])
-    group.links.new(background_delight.outputs['Color'], background_1.inputs['Color'])
+    group.links.new(background_delight.outputs['Result'], background_1.inputs['Color'])
     group.links.new(background_1.outputs['BSDF'], background_2.inputs[1])
     group.links.new(background_debug.outputs['Value'], background_2.inputs['Fac'])
     group.links.new(background_transparent.outputs['BSDF'], background_3.inputs[1])
@@ -708,7 +710,7 @@ def ensure_camera_project_group(camera, default_aspect=1.0):
     aspect_ratio_2 = group.nodes.new(type='ShaderNodeCombineXYZ')
     aspect_ratio_div = group.nodes.new(type='ShaderNodeMath')
     aspect_ratio_lt = group.nodes.new(type='ShaderNodeMath')
-    aspect_ratio_switch = group.nodes.new(type='ShaderNodeMixRGB')
+    aspect_ratio_switch = group.nodes.new(type='ShaderNodeMix')
     user_transforms = group.nodes.new(type='ShaderNodeVectorMath')
 
     recenter = group.nodes.new(type='ShaderNodeVectorMath')
@@ -873,8 +875,9 @@ def ensure_camera_project_group(camera, default_aspect=1.0):
     aspect_ratio_div.inputs[0].default_value = 1.0
     aspect_ratio_lt.operation = 'LESS_THAN'
     aspect_ratio_lt.inputs[1].default_value = 1.0
+    aspect_ratio_switch.data_type = 'VECTOR'
     aspect_ratio_switch.blend_type = 'MIX'
-    aspect_ratio_switch.use_clamp = False
+    aspect_ratio_switch.clamp_result = False
 
     user_transforms.operation = 'MULTIPLY'
 
@@ -913,13 +916,13 @@ def ensure_camera_project_group(camera, default_aspect=1.0):
     group.links.new(lens_shift_2.outputs['Vector'], user_translate.inputs[0])
 
     group.links.new(aspect_ratio_div.outputs[0], aspect_ratio_2.inputs['X'])
-    group.links.new(aspect_ratio_1.outputs[0], aspect_ratio_switch.inputs[1])
-    group.links.new(aspect_ratio_2.outputs[0], aspect_ratio_switch.inputs[2])
-    group.links.new(aspect_ratio_lt.outputs[0], aspect_ratio_switch.inputs[0])
+    group.links.new(aspect_ratio_1.outputs[0], aspect_ratio_switch.inputs['A'])
+    group.links.new(aspect_ratio_2.outputs[0], aspect_ratio_switch.inputs['B'])
+    group.links.new(aspect_ratio_lt.outputs[0], aspect_ratio_switch.inputs['Factor'])
 
     group.links.new(user_translate.outputs['Vector'], user_rotate.inputs['Vector'])
     group.links.new(user_rotate.outputs['Vector'], user_transforms.inputs[0])
-    group.links.new(aspect_ratio_switch.outputs[0], user_transforms.inputs[1])
+    group.links.new(aspect_ratio_switch.outputs['Result'], user_transforms.inputs[1])
     group.links.new(user_transforms.outputs['Vector'], recenter.inputs[0])
 
     group.links.new(recenter.outputs['Vector'], output.inputs['Vector'])
