@@ -160,8 +160,13 @@ def create_compify_material(name, camera, footage):
     # Create a new completely empty node-based material.
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
-    mat.blend_method = 'HASHED'
-    mat.shadow_method = 'HASHED'
+    # Blender 4.2+ replaced blend/shadow method with these properties.
+    if hasattr(mat, "surface_render_method"):
+        mat.surface_render_method = 'DITHERED'
+        mat.use_transparent_shadow = True
+    else:
+        mat.blend_method = 'HASHED'
+        mat.shadow_method = 'HASHED'
     for node in mat.node_tree.nodes:
         mat.node_tree.nodes.remove(node)
 
